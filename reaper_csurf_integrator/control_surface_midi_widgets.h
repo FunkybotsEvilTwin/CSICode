@@ -1909,17 +1909,55 @@ private:
     int preventUpdateTrackColors_;
     string lastStringSent_;
     WDL_TypedBuf<rgba_color> currentTrackColors_;
-    static int colorFromString(const char *str)
+
+    enum XTouchColor {
+        COLOR_INVALID = -1,
+        COLOR_OFF = 0,
+        COLOR_RED,
+        COLOR_GREEN,
+        COLOR_YELLOW,
+        COLOR_BLUE,
+        COLOR_MAGENTA,
+        COLOR_CYAN,
+        COLOR_WHITE
+    };
+
+    static XTouchColor colorFromString(const char *str)
     {
-        if (!strcmp(str, "Black")) return 0;
-        if (!strcmp(str, "Red")) return 1;
-        if (!strcmp(str, "Green")) return 2;
-        if (!strcmp(str, "Yellow")) return 3;
-        if (!strcmp(str, "Blue")) return 4;
-        if (!strcmp(str, "Magenta")) return 5;
-        if (!strcmp(str, "Cyan")) return 6;
-        if (!strcmp(str, "White")) return 7;
-        return -1;
+        if (!strcmp(str, "Black")) return COLOR_OFF;
+        if (!strcmp(str, "Red")) return COLOR_RED;
+        if (!strcmp(str, "Green")) return COLOR_GREEN;
+        if (!strcmp(str, "Yellow")) return COLOR_YELLOW;
+        if (!strcmp(str, "Blue")) return COLOR_BLUE;
+        if (!strcmp(str, "Magenta")) return COLOR_MAGENTA;
+        if (!strcmp(str, "Cyan")) return COLOR_CYAN;
+        if (!strcmp(str, "White")) return COLOR_WHITE;
+        return COLOR_INVALID;
+    }
+
+    static XTouchColor rgbToColor(int r, int g, int b) {
+        bool r_on = r >= 128;
+        bool g_on = g >= 128;
+        bool b_on = b >= 128;
+
+        if (r_on && g_on && b_on)
+            return COLOR_WHITE;
+        if (r_on && g_on && !b_on)
+            return COLOR_YELLOW;
+        if (r_on && !g_on && b_on)
+            return COLOR_MAGENTA;
+        if (!r_on && g_on && b_on)
+            return COLOR_CYAN;
+        if (r_on && !g_on && !b_on)
+            return COLOR_RED;
+        if (!r_on && g_on && !b_on)
+            return COLOR_GREEN;
+        if (!r_on && !g_on && b_on)
+            return COLOR_BLUE;
+        // if any component is not zero, assume white
+        if (r > 0 || g > 0 || b > 0)
+            return COLOR_WHITE;
+        return COLOR_OFF;
     }
     
 public:
@@ -1965,15 +2003,18 @@ public:
         
         for (int i = 0; i < surface_->GetNumChannels(); ++i)
         {
-            int surfaceColor = 7; // White
+            // white by default
+            XTouchColor msgColor = COLOR_WHITE;
+            // either all 8 are defined, or there's just one
+            const char *curColorStr = currentColors.size() == 1 ?
+                currentColors[0].c_str() : currentColors[i].c_str();
+            XTouchColor curColor = colorFromString(curColorStr);
+
+            // if we can parse the color, override it
+            if (curColor != COLOR_INVALID)
+                msgColor = curColor;
             
-            int c = 0;
-            if (currentColors.size() == 1 && (c = colorFromString(currentColors[0].c_str())) >= 0)
-                surfaceColor = c;
-            else if (currentColors.size() == 8 && i < currentColors.size() && (c = colorFromString(currentColors[i].c_str())) >= 0)
-                surfaceColor = c;
-            
-            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = surfaceColor;
+            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = (int)msgColor;
         }
         
         midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF7;
@@ -2068,23 +2109,7 @@ public:
                 int g = color.g;
                 int b = color.b;
 
-                int surfaceColor = 0;
-                
-                if (abs(r - g) < 30 && abs(r - b) < 30 && abs(g - b) < 30)  // White
-                    surfaceColor = 7;
-                else if (abs(r - g) < 30 && r > b && g > b)  // Yellow r + g
-                    surfaceColor = 3;
-                else if (abs(r - b) < 30 && r > g && b > g)  // Magenta r + b
-                    surfaceColor = 5;
-                else if (abs(g - b) < 30 && g > r && b > r)  // Cyan g + b
-                    surfaceColor = 6;
-                else if (r > g && r > b) // Red
-                    surfaceColor = 1;
-                else if (g > r && g > b) // Green
-                    surfaceColor = 2;
-                else if (b > r && b > g) // Blue
-                    surfaceColor = 4;
-
+                int surfaceColor = (int)rgbToColor(r, g, b);
 
                 midiSysExData.evt.midi_message[midiSysExData.evt.size++] = surfaceColor;
             }
