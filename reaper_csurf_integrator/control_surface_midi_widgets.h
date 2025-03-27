@@ -1901,86 +1901,6 @@ private:
     string lastStringSent_;
     vector<rgba_color> currentTrackColors_;
 
-    enum XTouchColor {
-        COLOR_INVALID = -1,
-        COLOR_OFF = 0,
-        COLOR_RED,
-        COLOR_GREEN,
-        COLOR_YELLOW,
-        COLOR_BLUE,
-        COLOR_MAGENTA,
-        COLOR_CYAN,
-        COLOR_WHITE
-    };
-
-    static XTouchColor colorFromString(const char *str)
-    {
-        if (!strcmp(str, "Black"))   return COLOR_OFF;
-        if (!strcmp(str, "Red"))     return COLOR_RED;
-        if (!strcmp(str, "Green"))   return COLOR_GREEN;
-        if (!strcmp(str, "Yellow"))  return COLOR_YELLOW;
-        if (!strcmp(str, "Blue"))    return COLOR_BLUE;
-        if (!strcmp(str, "Magenta")) return COLOR_MAGENTA;
-        if (!strcmp(str, "Cyan"))    return COLOR_CYAN;
-        if (!strcmp(str, "White"))   return COLOR_WHITE;
-        return COLOR_INVALID;
-    }
-
-    static int rgbToColor(int r, int g, int b)
-    {
-        // Doing a RGB to HSV conversion since HSV is better for light
-        // Converting RGB to floats between 0 and 1.0 (percentage)
-        float rf = r / 255.0;
-        float gf = g / 255.0;
-        float bf = b / 255.0;
-
-        // Hue will be between 0 and 360 to represent the color wheel.
-        // Saturation and Value are a percentage (between 0 and 1.0)
-        float h, s, v, colorMin, delta;
-        v = max(max(rf, gf), bf);
-
-        // If value is less than this percentage, LCD should be off.
-        if (v <= 0.20)
-            return COLOR_WHITE; // This could be OFF, but that would show nothing.
-
-        colorMin = min(min(rf, gf), bf);
-        delta = v - colorMin;
-        // Don't need divide by zero check since if value is 0 it will return COLOR_OFF above.
-        s = delta / v;
-
-        // If saturation is less than this percentage, LCD should be white.
-        if (s <= 0.20)
-            return COLOR_WHITE;
-
-        // Now we have a valid color. Figure out the hue and return the closest X-Touch value.
-        if (rf >= v)
-            h = (gf - bf) / delta;
-        else if (gf >= v)
-            h = ((bf - rf) / delta) + 2.0;
-        else
-            h = ((rf - gf) / delta) + 4.0;
-
-        h *= 60.0;
-        if (h < 0)
-            h += 360.0;
-
-        // The numbers represent the hue from 0-360.
-        if (h >= 330 || h < 20)
-            return COLOR_RED;
-        if (h >= 250)
-            return COLOR_MAGENTA;
-        if (h >= 220)
-            return COLOR_BLUE;
-        if (h >= 160)
-            return COLOR_CYAN;
-        if (h >= 80)
-            return COLOR_GREEN;
-        if (h >= 20)
-            return COLOR_YELLOW;
-
-        return COLOR_WHITE; // failsafe
-    }
-        
 public:
     virtual ~XTouchDisplay_Midi_FeedbackProcessor() {}
     XTouchDisplay_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, int displayUpperLower, int displayType, int displayRow, int channel) : Midi_FeedbackProcessor(csi, surface, widget), offset_(displayUpperLower  *56), displayType_(displayType), displayRow_(displayRow), channel_(channel)
@@ -2026,17 +1946,17 @@ public:
         for (int i = 0; i < surface_->GetNumChannels(); ++i)
         {
             // white by default
-            XTouchColor msgColor = COLOR_WHITE;
+            int msgColor = 7; // COLOR_WHITE
             // either all 8 are defined, or there's just one
             const char *curColorStr = currentColors.size() == 1 ?
                 currentColors[0].c_str() : currentColors[i].c_str();
-            XTouchColor curColor = colorFromString(curColorStr);
+            int curColor = BehringerColor::colorFromString(curColorStr);
 
             // if we can parse the color, override it
-            if (curColor != COLOR_INVALID)
+            if (curColor != -1) // -1 COLOR_INVALID
                 msgColor = curColor;
 
-            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = (int)msgColor;
+            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = msgColor;
         }
         
         midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF7;
@@ -2131,7 +2051,7 @@ public:
                 int g = color.g;
                 int b = color.b;
 
-                int surfaceColor = (int)rgbToColor(r, g, b);
+                int surfaceColor = BehringerColor::rgbToColor(r, g, b);
                 
                 midiSysExData.evt.midi_message[midiSysExData.evt.size++] = surfaceColor;
             }
