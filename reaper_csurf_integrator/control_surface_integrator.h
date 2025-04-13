@@ -43,6 +43,8 @@
 
 #include "control_surface_integrator_Reaper.h"
 
+#include "handy_functions.h"
+
 #ifdef INCLUDE_LOCALIZE_IMPORT_H
 #define LOCALIZE_IMPORT_PREFIX "csi_"
 #include "../WDL/localize/localize-import.h"
@@ -71,6 +73,7 @@ extern void UpdateLearnWindow(ZoneManager *zoneManager);
 extern void InitBlankLearnFocusedFXZone(ZoneManager *zoneManager, Zone *fxZone, MediaTrack *track, int fxSlot);
 extern void ShutdownLearn();
 
+extern int g_debugLevel;
 extern bool g_surfaceRawInDisplay;
 extern bool g_surfaceInDisplay;
 extern bool g_surfaceOutDisplay;
@@ -493,6 +496,8 @@ private:
     bool supportsTrackColor_ = false;
         
     bool provideFeedback_= true;
+
+    string m_freeFormText;
     
     PropertyList widgetProperties_;
         
@@ -500,10 +505,7 @@ private:
     void GetSteppedValues(Widget *widget, Action *action,  Zone *zone, int paramNumber, const vector<string> &params, const PropertyList &widgetProperties, double &deltaValue, vector<double> &acceleratedDeltaValues, double &rangeMinimum, double &rangeMaximum, vector<double> &steppedValues, vector<int> &acceleratedTickValues);
     void SetColor(const vector<string> &params, bool &supportsColor, bool &supportsTrackColor, vector<rgba_color> &colorValues);
     void GetColorValues(vector<rgba_color> &colorValues, const vector<string> &colors);
-
-    // ***** NEW: Free form text for FX assignment *****
-    std::string m_freeFormText;
-
+    void LogAction(double value);
 public:
     ActionContext(CSurfIntegrator *const csi, Action *action, Widget *widget, Zone *zone, int paramIndex, const vector<string> &params);
 
@@ -569,7 +571,7 @@ public:
     bool    GetProvideFeedback() { return provideFeedback_; }
        
     void SetStringParam(const char *stringParam) 
-    { 
+    {
         stringParam_ = stringParam;
         RequestUpdate();
     }
@@ -904,7 +906,7 @@ public:
     void SetXTouchDisplayColors(const char *colors);
     void RestoreXTouchDisplayColors();
     void ForceClear();
-    void LogInput(double value);    
+    void LogInput(double value);
 };
 
 ////////////////////////////
@@ -989,6 +991,7 @@ private:
         {
             ifstream file(filePath);
             
+            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "# LoadZoneMetadata: %s\n", GetRelativePath(filePath));
             for (string line; getline(file, line) ; )
             {
                 TrimLine(line);
@@ -1007,11 +1010,10 @@ private:
                 metadata.push_back(line);
             }
         }
-        catch (exception)
+        catch (const std::exception& e)
         {
-            char buffer[250];
-            snprintf(buffer, sizeof(buffer), "Trouble in %s, around line %d\n", filePath, lineNumber);
-            ShowConsoleMsg(buffer);
+            LogToConsole(256, "FAILED to LoadZoneMetadata in %s, around line %d\n", filePath, lineNumber);
+            LogToConsole(256, "Exception: %s\n", e.what());
         }
     }
     
@@ -1588,6 +1590,7 @@ public:
                 
     void AddZoneFilePath(const string &name, CSIZoneInfo &zoneInfo)
     {
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "# AddZoneFilePath %s\n", GetRelativePath(name.c_str()));
         if (zoneInfo_.find(name) == zoneInfo_.end())
             zoneInfo_[name] = zoneInfo;
         else
@@ -2474,6 +2477,7 @@ protected:
     void SendMidiSysExMessage(MIDI_event_ex_t *midiMessage);
     void SendMidiMessage(int first, int second, int third);
     void ForceMidiMessage(int first, int second, int third);
+    void LogMessage(char* value);
 
 public:
     ~Midi_FeedbackProcessor()
@@ -3896,28 +3900,19 @@ public:
                 ShowDuration(surfaces_[i]->GetName(), "Request Update", duration);
             }
             
-            char msgBuffer[250];
-            
-            snprintf(msgBuffer, sizeof(msgBuffer), "Total duration = %d\n\n\n", totalDuration);
-            ShowConsoleMsg(msgBuffer);
+            LogToConsole(256, "Total duration = %d\n\n\n", totalDuration);
         }
     }
     
     
     void ShowDuration(string item, int duration)
     {
-        char msgBuffer[250];
-        
-        snprintf(msgBuffer, sizeof(msgBuffer), "%s - %d microseconds\n", item.c_str(), duration);
-        ShowConsoleMsg(msgBuffer);
+        LogToConsole(256, "%s - %d microseconds\n", item.c_str(), duration);
     }
     
     void ShowDuration(string surface, string item, int duration)
     {
-        char msgBuffer[250];
-        
-        snprintf(msgBuffer, sizeof(msgBuffer), "%s - %s - %d microseconds\n", surface.c_str(), item.c_str(), duration);
-        ShowConsoleMsg(msgBuffer);
+        LogToConsole(256, "%s - %s - %d microseconds\n", surface.c_str(), item.c_str(), duration);
     }
    */
 
@@ -4252,10 +4247,7 @@ public:
          
          int duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() - start;
          
-         char msgBuffer[250];
-         
-         snprintf(msgBuffer, sizeof(msgBuffer), "%d microseconds\n", duration);
-         ShowConsoleMsg(msgBuffer);
+         LogToConsole(256, "%d microseconds\n", duration);
          }
         */
     }
@@ -4276,10 +4268,7 @@ public:
  
  int duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() - start;
  
- char msgBuffer[250];
- 
- snprintf(msgBuffer, sizeof(msgBuffer), "%d microseconds\n", duration);
- ShowConsoleMsg(msgBuffer);
+ LogToConsole(256, "%d microseconds\n", duration);
  
  */
 

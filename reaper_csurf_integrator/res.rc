@@ -7,7 +7,13 @@
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include "afxres.h"
+#endif
+
+#define IDC_STATIC 0
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -40,7 +46,11 @@ END
 
 2 TEXTINCLUDE 
 BEGIN
+#ifdef _WIN32
+    "#include ""windows.h""\r\n"
+#else
     "#include ""afxres.h""\r\n"
+#endif
     "\0"
 END
 
@@ -171,11 +181,12 @@ BEGIN
     CONTROL         "FXMenu",IDC_CHECK_FXMenu,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,345,60,36,10
     CONTROL         "GoHome",IDC_CHECK_GoHome,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,345,82,44,10
     CONTROL         "ModSquad",IDC_CHECK_Modifiers,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,346,104,44,10
-    CONTROL         "Show MIDI input",IDC_CHECK_ShowRawInput,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,15,180,65,10
-    CONTROL         "Show input",IDC_CHECK_ShowInput,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,86,180,47,10
-    CONTROL         "Show output",IDC_CHECK_ShowOutput,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,142,180,53,10
-    CONTROL         "Write params to CSI/ZoneRawFXFiles when FX inserted",IDC_CHECK_WriteFXParams,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,213,180,220,10
+    CONTROL         "MIDI input",IDC_CHECK_ShowRawInput,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,15,180,65,10
+    CONTROL         "Input",IDC_CHECK_ShowInput,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,86,180,47,10
+    CONTROL         "Output",IDC_CHECK_ShowOutput,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,142,180,53,10
+    CONTROL         "Write params to CSI/ZoneRawFXFiles when FX inserted",IDC_CHECK_WriteFXParams,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,213,180,220,10
+    LTEXT           "Debug Level (0-4):",IDC_LABEL_DebugLevel,15,200,60,10
+    EDITTEXT        IDC_EDIT_DebugLevel, 90, 200, 20, 14, ES_NUMBER | WS_TABSTOP
     DEFPUSHBUTTON   "OK",IDOK,290,210,52,14
     PUSHBUTTON      "Cancel",IDCANCEL,350,209,52,14
     LTEXT           "Broadcasters",IDC_STATIC,45,21,41,8

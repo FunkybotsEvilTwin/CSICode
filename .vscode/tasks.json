@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Parse this log file",
+      "type": "shell",
+      "command": "type",
+      "args": [
+        "${file}"
+      ],
+      "problemMatcher": {
+        "owner": "logfile",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.*)\\((\\d+)\\):",
+          "file": 1,
+          "line": 2
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "echo": true
+      }
+    }
+  ]
+}

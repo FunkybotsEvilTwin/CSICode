@@ -1,5 +1,5 @@
 //
-//  handy_reaper_functions.h
+//  handy_functions.h
 //  reaper_csurf_integrator
 //
 //
@@ -8,6 +8,9 @@
 #define handy_functions_h
 
 #include "../WDL/db2val.h"
+
+#include <stacktrace>
+#include <iostream>
 
 static double int14ToNormalized(unsigned char msb, unsigned char lsb)
 {
@@ -46,15 +49,73 @@ static double panToNormalized(double val)
     return 0.5 * (val + 1.0);
 }
 
-static void WindowsDebugOutput(const char * format, ...)
+enum DebugLevel {
+    DEBUG_LEVEL_ERROR   = 0,
+    DEBUG_LEVEL_WARNING = 1,
+    DEBUG_LEVEL_NOTICE  = 2,
+    DEBUG_LEVEL_INFO    = 3,
+    DEBUG_LEVEL_DEBUG   = 4
+};
+
+template <typename... Args>
+static void LogToConsole(int size, const char* format, Args... args)
 {
-    #if defined (_WIN32) && defined (_DEBUG)  
-        char buffer             [2056];
-        va_list args;
-        va_start(args, format);
-        vsprintf(buffer, format, args);
-        va_end(args);
-        OutputDebugString(buffer);
-    #endif
+    std::vector<char> buffer(size);
+    std::snprintf(buffer.data(), buffer.size(), format, args...);
+    ShowConsoleMsg(buffer.data());
+#ifdef _DEBUG
+    // std::ofstream logFile(std::string(GetResourcePath()) + "/CSI/CSI.log", std::ios::app);
+    std::ofstream logFile(std::string(__FILE__) + ".log", std::ios::app);
+    if (logFile.is_open())
+    {
+        char timeStr[32];
+        time_t rawtime;
+        time(&rawtime);
+        struct tm* timeinfo = localtime(&rawtime);
+        strftime(timeStr, sizeof(timeStr), "[%y-%m-%d %H:%M:%S] ", timeinfo);
+
+        logFile << timeStr << buffer.data();
+    }
+#endif
 }
+
+static void LogStackTraceToConsole() {
+// to enable std::stacktrace change LanguageStandard to stdcpp23
+// Windows\reaper_csurf_integrator\reaper_csurf_integrator\reaper_csurf_integrator.vcxproj
+//   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+//     <ClCompile>
+//       <WarningLevel>Level3</WarningLevel>
+//       <Optimization>Disabled</Optimization>
+//       <SDLCheck>true</SDLCheck>
+//       <PreprocessorDefinitions>_WINDLL;%(PreprocessorDefinitions) _CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+//       <LanguageStandard>stdcpp23</LanguageStandard>
+//     </ClCompile>
+//   </ItemDefinitionGroup>
+    auto trace = std::stacktrace::current();
+    LogToConsole(256, "===== Stack Trace Start =====\n");
+    for (const auto& frame : trace) {
+        std::stringstream ss;
+        ss << frame;
+        std::string line = ss.str();
+        LogToConsole(1024, "%s\n", line.c_str());
+    }
+    LogToConsole(256, "===== Stack Trace End =====\n");
+}
+
+static const char* GetRelativePath(const char* absolutePath)
+{
+    const char* resourcePath = GetResourcePath();
+    size_t resourcePathLen = std::strlen(resourcePath);
+
+    if (std::strncmp(absolutePath, resourcePath, resourcePathLen) == 0)
+    {
+        const char* rel = absolutePath + resourcePathLen;
+        if (*rel == '/' || *rel == '\\')
+            ++rel;
+        return rel;
+    }
+
+    return absolutePath;
+}
+
 #endif /* handy_functions_h */
