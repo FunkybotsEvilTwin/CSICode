@@ -2145,7 +2145,9 @@ void Zone::Activate()
 }
 
 void Zone::Deactivate()
-{    
+{
+    if (! isActive_)
+        return;
     for (auto &widget : widgets_)
     {
         for (auto &actionContext : GetActionContexts(widget))
