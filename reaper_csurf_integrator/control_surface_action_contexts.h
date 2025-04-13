@@ -45,16 +45,22 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        // Reaper actions ignored, as they cause crashes
-        int commandID = context->GetCommandId();
-        if  (  commandID == 41743    // Refresh all surfaces", CSI receives the surface control release message after this but no one is home :)
-            || commandID == 40023    // Open new project
-            || commandID == 40860    // Close current project tab
-            || commandID == 46000    // Insert track from template
-            )
-           return;
-
-
+        //FIXME: refactor the logic to support all commands without crashing. "it causes crash -- CSI receives the surface control release message after this but no one is home :)"
+        static const int ignoredCommands[] = { 
+            41743 // Refresh all surfaces
+           ,40023 // Open new project
+           ,40860 // Close current project tab
+           ,46000 // Insert track from template
+       };
+       static const size_t ignoredCommandCount = sizeof(ignoredCommands) / sizeof(int);
+       for (size_t i = 0; i < ignoredCommandCount; ++i)
+       {
+           if (ignoredCommands[i] == context->GetCommandId())
+           {
+               LogToConsole(256, "Ignoring command '%d' ('%s'), it causes crash", context->GetCommandId(), DAW::GetCommandName(context->GetCommandId()));
+               return;
+           }
+       }
         // used for Increase/Decrease
         if (value < 0 && context->GetRangeMinimum() < 0)
             DAW::SendCommandMessage(context->GetCommandId());
