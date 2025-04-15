@@ -58,7 +58,7 @@ void GetPropertiesFromTokens(int start, int finish, const vector<string> &tokens
             {
                 properties.set_prop(prop, tok); // unknown properties are preserved as Unknown, key=value pair
 
-                LogToConsole(256, "CSI does not support property named %s\n", tok);
+                if (g_debugLevel >= DEBUG_LEVEL_WARNING) LogToConsole(256, "[WARNING] CSI does not support property named %s\n", tok);
                 
                // WDL_ASSERT(false);
             }
@@ -209,7 +209,7 @@ void TrimLine(string &line)
            line.append(p++,1);
         }
     }
-    if (!line.empty() && g_debugLevel > DEBUG_LEVEL_DEBUG) LogToConsole(2048, "%s\n", line.c_str());
+    if (!line.empty() && g_debugLevel > DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] %s\n", line.c_str());
 }
 
 void ReplaceAllWith(string &output, const char *charsToReplace, const char *replacement)
@@ -458,7 +458,7 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
     
     if (widget == NULL)
     {
-        LogToConsole(2048, "FAILED to ProcessMidiWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
+        LogToConsole(2048, "[ERROR] FAILED to ProcessMidiWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
         return;
     }
     vector<vector<string>> tokenLines;
@@ -774,7 +774,7 @@ void OSC_ControlSurface::ProcessOSCWidget(int &lineNumber, ifstream &surfaceTemp
     
     if (widget == NULL)
     {
-        LogToConsole(2048, "FAILED to ProcessOSCWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
+        LogToConsole(2048, "[ERROR] FAILED to ProcessOSCWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
         return;
     }
     
@@ -897,7 +897,7 @@ void Midi_ControlSurface::ProcessMIDIWidgetFile(const string &filePath, Midi_Con
     {
         ifstream file(filePath);
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "# ProcessMIDIWidgetFile: %s\n", GetRelativePath(filePath.c_str()));
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] ProcessMIDIWidgetFile: %s\n", GetRelativePath(filePath.c_str()));
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
@@ -922,8 +922,8 @@ void Midi_ControlSurface::ProcessMIDIWidgetFile(const string &filePath, Midi_Con
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "FAILED to ProcessMIDIWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
-        LogToConsole(256, "Exception: %s\n", e.what());
+        LogToConsole(256, "[ERROR] FAILED to ProcessMIDIWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
+        LogToConsole(2048, "Exception: %s\n", e.what());
     }
 }
 
@@ -944,7 +944,7 @@ void OSC_ControlSurface::ProcessOSCWidgetFile(const string &filePath)
     {
         ifstream file(filePath);
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "# ProcessOSCWidgetFile: %s\n", filePath.c_str());
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] ProcessOSCWidgetFile: %s\n", filePath.c_str());
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
@@ -969,8 +969,8 @@ void OSC_ControlSurface::ProcessOSCWidgetFile(const string &filePath)
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "FAILED to ProcessOSCWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
-        LogToConsole(256, "Exception: %s\n", e.what());
+        LogToConsole(256, "[ERROR] FAILED to ProcessOSCWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
+        LogToConsole(2048, "Exception: %s\n", e.what());
     }
 }
 
@@ -1399,8 +1399,8 @@ void CSurfIntegrator::Init()
                                     }
                                     catch (const std::exception& e)
                                     {
-                                        LogToConsole(256, "FAILED to Init. Unable to create folder %s\n", fxZoneFolder.c_str());
-                                        LogToConsole(256, "Exception: %s\n", e.what());
+                                        LogToConsole(256, "[ERROR] FAILED to Init. Unable to create folder %s\n", fxZoneFolder.c_str());
+                                        LogToConsole(2048, "Exception: %s\n", e.what());
       
                                         char tmp[MEDBUF];
                                         snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), fxZoneFolder.c_str());
@@ -1446,8 +1446,8 @@ void CSurfIntegrator::Init()
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "FAILED to Init in %s, around line %d\n", iniFilePath.c_str(), lineNumber);
-        LogToConsole(256, "Exception: %s\n", e.what());
+        LogToConsole(256, "[ERROR] FAILED to Init in %s, around line %d\n", iniFilePath.c_str(), lineNumber);
+        LogToConsole(2048, "Exception: %s\n", e.what());
     }
     
     if (pages_.size() == 0)
@@ -1669,7 +1669,7 @@ void ActionContext::RunDeferredActions()
     if (holdDelayAmount_ != 0 && delayStartTimeValid_ && (GetTickCount() - delayStartTime_) > holdDelayAmount_)
     {
         DWORD actualHoldTime = GetTickCount() - delayStartTime_;
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "# HOLD [W=%s] %d ms\n", GetWidget()->GetName(), actualHoldTime);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [W=%s] %d ms\n", GetWidget()->GetName(), actualHoldTime);
         if (steppedValues_.size() > 0)
         {
             if (deferredValue_ != 0.0) // ignore release messages
@@ -1786,7 +1786,7 @@ void ActionContext::LogAction(double value)
 {
    char contextParams[128];
    if (g_debugLevel >= DEBUG_LEVEL_DEBUG)
-        snprintf(contextParams, sizeof(contextParams), "Colr:%c Fbk:%c InvVal:%c InvFbk:%c HoldDly:%d RepIvl:%d LastRep:%d DlySta:%d DefVal:%d",
+        snprintf(contextParams, sizeof(contextParams), " Colr:%c Fbk:%c InvVal:%c InvFbk:%c HoldDly:%d RepIvl:%d LastRep:%d DlySta:%d DefVal:%d",
             supportsColor_ ? '+' : '-',
             provideFeedback_ ? '+' : '-',
             isValueInverted_ ? '+' : '-',
@@ -1795,16 +1795,17 @@ void ActionContext::LogAction(double value)
         );
 
     // if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "@S=%s {Z=%s} [W=%s] <C=%s> A=%s \"%s\" (%0.2f) // %s\n"
-    if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "{ surf='%s', zone='%s', widg='%s', ctx='%s[%s]', act='%s', prm='%s', val='%0.2f', desc='%s' }\n"
+    //if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "{ surf='%s', zone='%s', widg='%s', ctx='%s[%s]', act='%s', prm='%s', val='%0.2f', desc='%s' }\n"
+    if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "[INFO] @%s/%s: [%s] %s(%s) # %s; val:%0.2f ctx:%s%s\n"
         ,this->GetSurface()->GetName()
         ,this->GetZone()->GetName()
         ,this->GetWidget()->GetName()
-        ,this->GetName()
-        ,contextParams
         ,this->GetAction()->GetName()
         ,this->GetStringParam()
-        ,value
         ,(this->GetCommandId() > 0) ? DAW::GetCommandName(this->GetCommandId()) : ""
+        ,value
+        ,this->GetName()
+        ,contextParams
     );
 }
 
@@ -2572,7 +2573,7 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
         CSIZoneInfo info;
         info.filePath = filePath;
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "# PreProcessZoneFile: %s\n", GetRelativePath(filePath.c_str()));
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] PreProcessZoneFile: %s\n", GetRelativePath(filePath.c_str()));
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
@@ -2594,8 +2595,8 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "FAILED to PreProcessZoneFile in %s\n", filePath.c_str());
-        LogToConsole(256, "Exception: %s\n", e.what());
+        LogToConsole(256, "[ERROR] FAILED to PreProcessZoneFile in %s\n", filePath.c_str());
+        LogToConsole(2048, "Exception: %s\n", e.what());
     }
 }
 
@@ -2724,7 +2725,7 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
     {
         ifstream file(filePath);
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "\t{Z=%s} # LoadZoneFile: %s\n", zone->GetName(), GetRelativePath(filePath));
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] {Z:%s} # LoadZoneFile: %s\n", zone->GetName(), GetRelativePath(filePath));
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
@@ -2819,8 +2820,8 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "FAILED to LoadZoneFile in %s, around line %d\n", zone->GetSourceFilePath(), lineNumber);
-        LogToConsole(256, "Exception: %s\n", e.what());
+        LogToConsole(256, "[ERROR] FAILED to LoadZoneFile in %s, around line %d\n", zone->GetSourceFilePath(), lineNumber);
+        LogToConsole(2048, "Exception: %s\n", e.what());
     }
 }
 

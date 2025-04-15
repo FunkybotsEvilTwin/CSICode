@@ -64,8 +64,7 @@ static void LogToConsole(int size, const char* format, Args... args)
     std::snprintf(buffer.data(), buffer.size(), format, args...);
     ShowConsoleMsg(buffer.data());
 #ifdef _DEBUG
-    // std::ofstream logFile(std::string(GetResourcePath()) + "/CSI/CSI.log", std::ios::app);
-    std::ofstream logFile(std::string(__FILE__) + ".log", std::ios::app);
+    std::ofstream logFile(std::string(GetResourcePath()) + "/CSI/CSI.log", std::ios::app);
     if (logFile.is_open())
     {
         char timeStr[32];
@@ -99,7 +98,18 @@ static void LogStackTraceToConsole() {
         std::stringstream ss;
         ss << frame;
         std::string line = ss.str();
-        LogToConsole(1024, "%s\n", line.c_str());
+        if (line.find('\\') != std::string::npos || line.find('/') != std::string::npos)
+        {
+            size_t pos = 0;
+            while ((pos = line.find("reaper_csurf_integrator!", pos)) != std::string::npos)
+                line.replace(pos, 24, "");
+
+            pos = line.find("+0x");
+            if (pos != std::string::npos)
+                line = line.substr(0, pos);
+
+            LogToConsole(1024, "%s\n", line.c_str());
+        }
     }
     LogToConsole(256, "===== Stack Trace End =====\n");
     #else

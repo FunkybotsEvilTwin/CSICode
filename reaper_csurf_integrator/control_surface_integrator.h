@@ -991,7 +991,7 @@ private:
         {
             ifstream file(filePath);
             
-            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "# LoadZoneMetadata: %s\n", GetRelativePath(filePath));
+            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] LoadZoneMetadata: %s\n", GetRelativePath(filePath));
             for (string line; getline(file, line) ; )
             {
                 TrimLine(line);
@@ -1012,8 +1012,8 @@ private:
         }
         catch (const std::exception& e)
         {
-            LogToConsole(256, "FAILED to LoadZoneMetadata in %s, around line %d\n", filePath, lineNumber);
-            LogToConsole(256, "Exception: %s\n", e.what());
+            LogToConsole(256, "[ERROR] FAILED to LoadZoneMetadata in %s, around line %d\n", filePath, lineNumber);
+            LogToConsole(2048, "Exception: %s\n", e.what());
         }
     }
     
@@ -1590,7 +1590,7 @@ public:
                 
     void AddZoneFilePath(const string &name, CSIZoneInfo &zoneInfo)
     {
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "# AddZoneFilePath %s\n", GetRelativePath(name.c_str()));
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] AddZoneFilePath %s\n", GetRelativePath(name.c_str()));
         if (zoneInfo_.find(name) == zoneInfo_.end())
             zoneInfo_[name] = zoneInfo;
         else
@@ -4072,7 +4072,11 @@ public:
         if (actions_.find(actionName) != actions_.end())
             return actions_[actionName].get();
         else
+        {
+            LogToConsole(256, "[ERROR] FAILED to GetAction '%s'\n", actionName);
+
             return actions_["NoAction"].get();
+        }
     }
     
     void OnTrackSelection(MediaTrack *track) override
