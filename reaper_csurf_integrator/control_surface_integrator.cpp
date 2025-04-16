@@ -23,15 +23,12 @@ int g_minNumParamSteps = 1;
 int g_maxNumParamSteps = 30;
 #ifdef _DEBUG
 int g_debugLevel = DEBUG_LEVEL_DEBUG;
-bool g_surfaceRawInDisplay = true;
-bool g_surfaceInDisplay = true;
-bool g_surfaceOutDisplay = true;
 #else
 int g_debugLevel = DEBUG_LEVEL_ERROR;
+#endif
 bool g_surfaceRawInDisplay;
 bool g_surfaceInDisplay;
 bool g_surfaceOutDisplay;
-#endif
 
 bool g_fxParamsWrite;
 
@@ -1666,58 +1663,38 @@ const char *ActionContext::GetName()
 
 void ActionContext::RunDeferredActions()
 {
-    if (holdDelayAmount_ != 0 && delayStartTimeValid_ && (GetTickCount() - delayStartTime_) > holdDelayAmount_)
+    DWORD now = GetTickCount();
+    if (holdDelayAmount_ != 0 && delayStartTimeValid_ && (now - delayStartTime_) > holdDelayAmount_)
     {
-        DWORD actualHoldTime = GetTickCount() - delayStartTime_;
+        DWORD actualHoldTime = now - delayStartTime_;
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [W=%s] %d ms\n", GetWidget()->GetName(), actualHoldTime);
-        if (steppedValues_.size() > 0)
-        {
-            if (deferredValue_ != 0.0) // ignore release messages
-            {
-                if (steppedValuesIndex_ == steppedValues_.size() - 1)
-                {
-                    if (steppedValues_[0] < steppedValues_[steppedValuesIndex_]) // GAW -- only wrap if 1st value is lower
-                        steppedValuesIndex_ = 0;
-                }
-                else
-                    steppedValuesIndex_++;
-
-                DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
-            }
-        }
-        else
-            DoRangeBoundAction(deferredValue_);
-
-
-        if (holdDelayAmount_ != 0 && delayStartTimeValid_ && (GetTickCount() - delayStartTime_) > holdDelayAmount_)
-        {
-            delayStartTimeValid_ = false;
-            deferredValue_ = 0.0;
-        }
+        PerformAction(deferredValue_);
+        delayStartTimeValid_ = false;
+        deferredValue_ = 0.0;
     }
-    
-    if (holdRepeatInterval_ != 0 && (GetTickCount() - lastRepeatTime_  > holdRepeatInterval_))
+    if (holdRepeatInterval_ != 0 && (now - lastRepeatTime_ > holdRepeatInterval_))
     {
-        lastRepeatTime_ = GetTickCount();
-        
-        if (steppedValues_.size() > 0)
-        {
-            if (deferredValue_ != 0.0) // ignore release messages
-            {
-                if (steppedValuesIndex_ == steppedValues_.size() - 1)
-                {
-                    if (steppedValues_[0] < steppedValues_[steppedValuesIndex_]) // GAW -- only wrap if 1st value is lower
-                        steppedValuesIndex_ = 0;
-                }
-                else
-                    steppedValuesIndex_++;
-
-                DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
-            }
-        }
-        else
-            DoRangeBoundAction(deferredValue_);
+        lastRepeatTime_ = now;
+        PerformAction(deferredValue_);
     }
+}
+
+void ActionContext::PerformAction(double value)
+{
+    if (!steppedValues_.empty())
+    {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+        if (steppedValuesIndex_ == steppedValues_.size() - 1)
+        {
+            if (steppedValues_[0] < steppedValues_[steppedValuesIndex_]) // GAW -- only wrap if 1st value is lower
+                steppedValuesIndex_ = 0;
+        }
+        else steppedValuesIndex_++;
+
+        DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
+    }
+    else
+        DoRangeBoundAction(value);
 }
 
 void ActionContext::RequestUpdate()
@@ -1784,29 +1761,36 @@ void ActionContext::ForceWidgetValue(const char* value)
 
 void ActionContext::LogAction(double value)
 {
-   char contextParams[128];
-   if (g_debugLevel >= DEBUG_LEVEL_DEBUG)
-        snprintf(contextParams, sizeof(contextParams), " Colr:%c Fbk:%c InvVal:%c InvFbk:%c HoldDly:%d RepIvl:%d LastRep:%d DlySta:%d DefVal:%d",
-            supportsColor_ ? '+' : '-',
-            provideFeedback_ ? '+' : '-',
-            isValueInverted_ ? '+' : '-',
-            isFeedbackInverted_ ? '+' : '-',
-            holdDelayAmount_, holdRepeatInterval_, lastRepeatTime_, delayStartTime_, deferredValue_
-        );
+    if (g_debugLevel >= DEBUG_LEVEL_INFO)
+    {
+        char contextParams[128];
+        std::ostringstream oss;
+        if (supportsColor_) {
+            oss << " { ";
+            for (size_t i = 0; i < colorValues_.size(); ++i) {
+                oss << " " << colorValues_[i].r << " " << colorValues_[i].g << " " << colorValues_[i].b;
+                if (i != colorValues_.size() - 1) oss << ", ";
+            }
+            oss << " }[" << currentColorIndex_ << "]";
+        }
+        if (!provideFeedback_) oss << " FeedBack=No";
+        if (isValueInverted_) oss << " Invert";
+        if (isFeedbackInverted_) oss << " InvertFB";
+        if (holdDelayAmount_ > 0) oss << " HoldDelay=" << holdDelayAmount_;
+        if (holdRepeatInterval_ > 0) oss << " HoldRepeatInterval=" << holdRepeatInterval_;
 
-    // if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "@S=%s {Z=%s} [W=%s] <C=%s> A=%s \"%s\" (%0.2f) // %s\n"
-    //if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "{ surf='%s', zone='%s', widg='%s', ctx='%s[%s]', act='%s', prm='%s', val='%0.2f', desc='%s' }\n"
-    if (g_debugLevel >= DEBUG_LEVEL_INFO) LogToConsole(512, "[INFO] @%s/%s: [%s] %s(%s) # %s; val:%0.2f ctx:%s%s\n"
-        ,this->GetSurface()->GetName()
-        ,this->GetZone()->GetName()
-        ,this->GetWidget()->GetName()
-        ,this->GetAction()->GetName()
-        ,this->GetStringParam()
-        ,(this->GetCommandId() > 0) ? DAW::GetCommandName(this->GetCommandId()) : ""
-        ,value
-        ,this->GetName()
-        ,contextParams
-    );
+        LogToConsole(512, "[INFO] @%s/%s: [%s] %s(%s) # %s; val:%0.2f ctx:%s%s\n"
+            ,this->GetSurface()->GetName()
+            ,this->GetZone()->GetName()
+            ,this->GetWidget()->GetName()
+            ,this->GetAction()->GetName()
+            ,this->GetStringParam()
+            ,(this->GetCommandId() > 0) ? DAW::GetCommandName(this->GetCommandId()) : ""
+            ,value
+            ,this->GetName()
+            ,oss.str().c_str()
+        );
+    }
 }
 
 void ActionContext::DoAction(double value)
@@ -1833,24 +1817,8 @@ void ActionContext::DoAction(double value)
     }
     else
     {
-        if (steppedValues_.size() > 0)
-        {
-            if (value != 0.0) // ignore release messages
-            {
-                if (steppedValuesIndex_ == steppedValues_.size() - 1)
-                {
-                    if (steppedValues_[0] < steppedValues_[steppedValuesIndex_]) // GAW -- only wrap if 1st value is lower
-                        steppedValuesIndex_ = 0;
-                }
-                else
-                    steppedValuesIndex_++;
-
-                DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
-            }
-        }
-        else
-            DoRangeBoundAction(value);
-    } 
+        PerformAction(value);
+    }
 }
 
 void ActionContext::DoRelativeAction(double delta)
@@ -1873,7 +1841,7 @@ void ActionContext::DoRelativeAction(int accelerationIndex, double delta)
 
 void ActionContext::DoRangeBoundAction(double value)
 {
-    if (value != 0.0) // do not log release messages
+    if (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE)
         this->LogAction(value);
 
     if (value > rangeMaximum_)

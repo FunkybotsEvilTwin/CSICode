@@ -16,7 +16,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         vector<string> tokens;
         GetTokens(tokens, context->GetStringParam());
@@ -53,7 +53,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         vector<string> tokens;
         GetTokens(tokens, context->GetStringParam());
@@ -106,7 +106,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetCSI()->Speak(context->GetStringParam());
     }
@@ -121,7 +121,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetZone()->SetXTouchDisplayColors(context->GetStringParam());
     }
@@ -136,7 +136,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetZone()->RestoreXTouchDisplayColors();
     }
@@ -159,7 +159,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (IsProjectDirty(NULL))
             Main_SaveProject(NULL, false);
@@ -183,7 +183,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (DAW::CanUndo())
             DAW::Undo();
@@ -207,7 +207,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (DAW::CanRedo())
             DAW::Redo();
@@ -228,7 +228,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetPage()->ToggleSynchPages();
     }
@@ -248,7 +248,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetPage()->ToggleFollowMCP();
     }
@@ -268,7 +268,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetPage()->ToggleScrollLink(context->GetIntParam());
     }
@@ -283,7 +283,7 @@ public:
         
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->ToggleRestrictTextLength(context->GetIntParam());
     }
@@ -342,7 +342,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetCSI()->NextTimeDisplayMode();
     }
@@ -362,7 +362,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetCSI()->NextPage();
     }
@@ -382,7 +382,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetCSI()->GoToPage(context->GetStringParam());
     }
@@ -418,8 +418,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->DeclareGoHome();
     }
@@ -434,8 +433,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetPage()->GoHome();
     }
@@ -455,8 +453,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetZone()->GoSubZone(context->GetStringParam());
     }
@@ -476,8 +473,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetZone()->Deactivate();
     }
@@ -497,7 +493,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
             context->GetSurface()->GetZoneManager()->DeclareGoFXSlot(track, context->GetZone()->GetNavigator(), context->GetSlotIndex());
@@ -513,7 +509,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
             TrackFX_SetOpen(track, context->GetSlotIndex(), true);
@@ -529,7 +525,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
             TrackFX_SetOpen(track, context->GetSlotIndex(), false);
@@ -545,7 +541,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->ToggleUseLocalModifiers();
     }
@@ -565,7 +561,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->ToggleUseLocalFXSlot();
     }
@@ -580,7 +576,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->SetLatchTime(context->GetIntParam());
     }
@@ -602,7 +598,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->DeclareToggleEnableFocusedFXMapping();
     }
@@ -622,7 +618,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->DisableFocusedFXMapping();
     }
@@ -642,7 +638,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->DeclareToggleEnableLastTouchedFXParamMapping();
     }
@@ -662,7 +658,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->DisableLastTouchedFXParamMapping();
     }
@@ -677,7 +673,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         RequestFocusedFXDialog(context->GetSurface()->GetZoneManager());
     }
@@ -700,8 +696,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
        
         const char *name = context->GetStringParam();
         
@@ -726,8 +721,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         context->GetSurface()->GetZoneManager()->DeclareClearFXZone("LastTouchedFXParam");
     }
@@ -742,8 +736,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         context->GetSurface()->GetZoneManager()->DeclareClearFXZone("FocusedFX");
     }
@@ -758,8 +751,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         context->GetSurface()->GetZoneManager()->DeclareClearFXZone("SelectedTrackFX");
     }
@@ -774,8 +766,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         context->GetSurface()->GetZoneManager()->DeclareClearFXZone("FXSlot");
     }
@@ -1041,7 +1032,7 @@ public:
    
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         context->GetSurface()->ClearModifier(context->GetStringParam());
     }
@@ -1074,7 +1065,7 @@ public:
 
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->ToggleChannel(context->GetWidget()->GetChannelNumber());
     }

@@ -360,6 +360,10 @@ public:
         SendMidiMessage(0x91, midiFeedbackMessage1_.midi_message[1],  color.r);  // only 127 bit allowed in Midi byte 3
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1],  color.g);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1],  color.b);
+
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
 };
 
@@ -983,6 +987,9 @@ public:
         midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF7;
         
         SendMidiSysExMessage(&midiSysExData.evt);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
 };
 
@@ -1016,6 +1023,9 @@ public:
         SendMidiMessage(0x91, midiFeedbackMessage1_.midi_message[1], color.r / 2);  // only 127 bit allowed in Midi byte 3
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1], color.g / 2);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1], color.b / 2);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
 };
 
@@ -1054,6 +1064,9 @@ public:
         SendMidiMessage(0x91, midiFeedbackMessage1_.midi_message[1], color.r / 2);  // max 127 allowed in Midi byte 3
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1], color.g / 2);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1], color.b / 2);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
     
     virtual void ForceUpdateTrackColors() override
@@ -2841,18 +2854,21 @@ public:
             SendMidiMessage(color.r, color.g, color.b);
         else
         {
-            int colour = GetColorIntFromRGB(color.r, color.g, color.b);
+            int colorInt = GetColorIntFromRGB(color.r, color.g, color.b);
             // Originally, if the converted MIDI color is 0, it would send a message to turn off the LED.
             // Commenting this out prevents turning off the LED.
-            if (colour == 0)
+            if (colorInt == 0)
             {
                 // SendMidiMessage(midiFeedbackMessage1_.midi_message[0] + 1, midiFeedbackMessage1_.midi_message[1], 17); // turn off led
             }
             else
             {
-                SendMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], colour); // set color
+                SendMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], colorInt); // set color
                 SendMidiMessage(midiFeedbackMessage1_.midi_message[0] + 1, midiFeedbackMessage1_.midi_message[1], 47);  // turn on led max brightness
             }
+        }
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
 };

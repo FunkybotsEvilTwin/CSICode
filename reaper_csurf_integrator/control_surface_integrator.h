@@ -507,6 +507,7 @@ private:
     void GetColorValues(vector<rgba_color> &colorValues, const vector<string> &colors);
     void LogAction(double value);
 public:
+    static double constexpr BUTTON_RELEASE_MESSAGE_VALUE = 0.0;
     ActionContext(CSurfIntegrator *const csi, Action *action, Widget *widget, Zone *zone, int paramIndex, const vector<string> &params);
 
     virtual ~ActionContext() {}
@@ -543,6 +544,7 @@ public:
     
     void SetAction(Action *action) { action_ = action; RequestUpdate(); }
     void DoAction(double value);
+    void PerformAction(double value);
     void DoRelativeAction(double value);
     void DoRelativeAction(int accelerationIndex, double value);
     
@@ -973,8 +975,7 @@ private:
 
     void GoFXSlot(MediaTrack *track, Navigator *navigator, int fxSlot);
     void GoSelectedTrackFX();
-    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted,
-                                   bool &isDecrease, bool &isIncrease);
+    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &isDecrease, bool &isIncrease);
     void GetNavigatorsForZone(const char *zoneName, const char *navigatorName, vector<Navigator *> &navigators);
     void LoadZones(vector<unique_ptr<Zone>> &zones, vector<string> &zoneList);
          
