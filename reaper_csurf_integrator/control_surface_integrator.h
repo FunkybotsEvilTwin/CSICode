@@ -482,11 +482,13 @@ private:
     
     bool isValueInverted_ = false;
     bool isFeedbackInverted_ = false;
-    int  holdDelayAmount_ = 0;
-    int  holdRepeatInterval_ = 0;
-    int  lastRepeatTime_ = 0;
-    int  delayStartTime_ = 0;
-    bool delayStartTimeValid_= false;
+
+    int  holdDelayMs_ = 0;
+    int  holdRepeatIntervalMs_ = 0;
+    int  lastHoldRepeatTs_ = 0;
+    int  lastHoldStartTs_ = 0;
+    bool holdActive_= false;
+    bool holdRepeatActive_ = false;
     double deferredValue_ = 0.0;
     
     bool supportsColor_ = false;

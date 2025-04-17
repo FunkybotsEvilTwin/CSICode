@@ -1533,11 +1533,11 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
 
     const char* holdDelay = widgetProperties_.get_prop(PropertyType_HoldDelay);
     if (holdDelay)
-        holdDelayAmount_ = atoi(holdDelay);
+        holdDelayMs_ = atoi(holdDelay);
 
     const char* holdRepeatInterval = widgetProperties_.get_prop(PropertyType_HoldRepeatInterval);
     if (holdRepeatInterval)
-        holdRepeatInterval_ = atoi(holdRepeatInterval);
+        holdRepeatIntervalMs_ = atoi(holdRepeatInterval);
 
     for (int i = 0; i < (int)(paramsAndProperties).size(); ++i)
         if (paramsAndProperties[i] == "NoFeedback")
@@ -1661,42 +1661,6 @@ const char *ActionContext::GetName()
     return zone_->GetAlias();
 }
 
-void ActionContext::RunDeferredActions()
-{
-    DWORD now = GetTickCount();
-    if (holdDelayAmount_ != 0 && delayStartTimeValid_ && (now - delayStartTime_) > holdDelayAmount_)
-    {
-        DWORD actualHoldTime = now - delayStartTime_;
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [W=%s] %d ms\n", GetWidget()->GetName(), actualHoldTime);
-        PerformAction(deferredValue_);
-        delayStartTimeValid_ = false;
-        deferredValue_ = 0.0;
-    }
-    if (holdRepeatInterval_ != 0 && (now - lastRepeatTime_ > holdRepeatInterval_))
-    {
-        lastRepeatTime_ = now;
-        PerformAction(deferredValue_);
-    }
-}
-
-void ActionContext::PerformAction(double value)
-{
-    if (!steppedValues_.empty())
-    {
-        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
-        if (steppedValuesIndex_ == steppedValues_.size() - 1)
-        {
-            if (steppedValues_[0] < steppedValues_[steppedValuesIndex_]) // GAW -- only wrap if 1st value is lower
-                steppedValuesIndex_ = 0;
-        }
-        else steppedValuesIndex_++;
-
-        DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
-    }
-    else
-        DoRangeBoundAction(value);
-}
-
 void ActionContext::RequestUpdate()
 {
     if (provideFeedback_)
@@ -1776,8 +1740,8 @@ void ActionContext::LogAction(double value)
         if (!provideFeedback_) oss << " FeedBack=No";
         if (isValueInverted_) oss << " Invert";
         if (isFeedbackInverted_) oss << " InvertFB";
-        if (holdDelayAmount_ > 0) oss << " HoldDelay=" << holdDelayAmount_;
-        if (holdRepeatInterval_ > 0) oss << " HoldRepeatInterval=" << holdRepeatInterval_;
+        if (holdDelayMs_ > 0) oss << " HoldDelay=" << holdDelayMs_;
+        if (holdRepeatIntervalMs_ > 0) oss << " HoldRepeatInterval=" << holdRepeatIntervalMs_;
 
         LogToConsole(512, "[INFO] @%s/%s: [%s] %s(%s) # %s; val:%0.2f ctx:%s%s\n"
             ,this->GetSurface()->GetName()
@@ -1793,32 +1757,75 @@ void ActionContext::LogAction(double value)
     }
 }
 
+// runs once button pressed/released
 void ActionContext::DoAction(double value)
 {
-    if (holdRepeatInterval_ != 0)
-    {
-        deferredValue_ = value;
-        lastRepeatTime_ = GetTickCount();
-    }
+    deferredValue_ = (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? 0.0 : value;
 
-    if (holdDelayAmount_ != 0)
-    {
-        if (value == 0.0)
-        {
-            deferredValue_ = 0.0;
-            delayStartTimeValid_ = false;
-        }
-        else
-        {
-            deferredValue_ = value;
-            delayStartTime_ = GetTickCount();
-            delayStartTimeValid_ = true;
+    if (holdRepeatIntervalMs_ > 0) {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
+            holdRepeatActive_ = false;
+        } else {
+            holdRepeatActive_ = true;
+            if (holdDelayMs_ == 0) {
+                lastHoldRepeatTs_ = GetTickCount();
+            }
         }
     }
-    else
-    {
+    if (holdDelayMs_ > 0) {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
+            holdActive_ = false;
+        } else {
+            holdActive_ = true;
+            lastHoldStartTs_ = GetTickCount();
+        }
+    } else {
         PerformAction(value);
     }
+}
+
+// runs in loop to support button hold/repeat actions
+void ActionContext::RunDeferredActions()
+{
+    if (holdDelayMs_ > 0
+        && holdActive_
+        && lastHoldStartTs_ > 0
+        && GetTickCount() > (lastHoldStartTs_ + holdDelayMs_)
+    ) {
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldStartTs_);
+        PerformAction(deferredValue_);
+        holdActive_ = false; // to mark that this action with it's defined hold delay was performed and separate it from repeated action trigger
+        if (holdRepeatIntervalMs_ > 0) {
+            lastHoldRepeatTs_ = GetTickCount();
+        }
+    }
+    if (holdRepeatIntervalMs_ > 0
+        && holdRepeatActive_
+        && lastHoldRepeatTs_ > 0
+        && GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
+    ) {
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] REPEAT [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldRepeatTs_);
+        lastHoldRepeatTs_ = GetTickCount();
+        PerformAction(deferredValue_);
+    }
+}
+
+void ActionContext::PerformAction(double value)
+{
+    if (!steppedValues_.empty())
+    {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+        if (steppedValuesIndex_ == steppedValues_.size() - 1)
+        {
+            if (steppedValues_[0] < steppedValues_[steppedValuesIndex_]) // GAW -- only wrap if 1st value is lower
+                steppedValuesIndex_ = 0;
+        }
+        else steppedValuesIndex_++;
+
+        DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
+    }
+    else
+        DoRangeBoundAction(value);
 }
 
 void ActionContext::DoRelativeAction(double delta)
