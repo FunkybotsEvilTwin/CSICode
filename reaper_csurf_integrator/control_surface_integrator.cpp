@@ -1766,8 +1766,8 @@ void ActionContext::DoAction(double value)
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
             holdRepeatActive_ = false;
         } else {
-            holdRepeatActive_ = true;
             if (holdDelayMs_ == 0) {
+                holdRepeatActive_ = true;
                 lastHoldRepeatTs_ = GetTickCount();
             }
         }
@@ -1796,6 +1796,7 @@ void ActionContext::RunDeferredActions()
         PerformAction(deferredValue_);
         holdActive_ = false; // to mark that this action with it's defined hold delay was performed and separate it from repeated action trigger
         if (holdRepeatIntervalMs_ > 0) {
+            holdRepeatActive_ = true;
             lastHoldRepeatTs_ = GetTickCount();
         }
     }
