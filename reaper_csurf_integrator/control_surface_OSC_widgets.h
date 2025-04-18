@@ -35,14 +35,14 @@ private:
     {
         // Doing a RGB to HSV conversion since HSV is better for light
         // Converting RGB to floats between 0 and 1.0 (percentage)
-        float rf = r / 255.0;
-        float gf = g / 255.0;
-        float bf = b / 255.0;
+        float rf = r / 255.0f;
+        float gf = g / 255.0f;
+        float bf = b / 255.0f;
 
         // Hue will be between 0 and 360 to represent the color wheel.
         // Saturation and Value are a percentage (between 0 and 1.0)
         float h, s, v, colorMin, delta;
-        v = max(max(rf, gf), bf);
+        v = (float) max(max(rf, gf), bf);
 
         // If value is less than this percentage, LCD should be off.
         if (v <= 0.10)
@@ -59,8 +59,8 @@ private:
 
         // Now we have a valid color. Figure out the hue and return the closest X-Touch value.
         if (rf >= v)        h =  (gf - bf) / delta;
-        else if (gf >= v)   h = ((bf - rf) / delta) + 2.0;
-        else                h = ((rf - gf) / delta) + 4.0;
+        else if (gf >= v)   h = ((bf - rf) / delta) + 2.0f;
+        else                h = ((rf - gf) / delta) + 4.0f;
 
         h *= 60.0;
         if (h < 0)  h += 360.0;

@@ -3622,7 +3622,7 @@ WDL_DLGRET dlgProcMainConfig(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
                                 
                                 if (s_pageIndex >= 0)
                                 {
-                                    for (int i = s_pages[s_pageIndex]->broadcasters.size() - 1; i >= 0; --i)
+                                    for (int i = (int) s_pages[s_pageIndex]->broadcasters.size() - 1; i >= 0; --i)
                                     {
                                         if (s_pages[s_pageIndex]->broadcasters[i]->name == deletedSurface)
                                         {
@@ -3631,13 +3631,13 @@ WDL_DLGRET dlgProcMainConfig(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
                                         }
                                         else
                                         {
-                                            for (int k = s_pages[s_pageIndex]->broadcasters[i]->listeners.size() - 1; k >= 0; --k)
+                                            for (int k = (int) s_pages[s_pageIndex]->broadcasters[i]->listeners.size() - 1; k >= 0; --k)
                                                 if (s_pages[s_pageIndex]->broadcasters[i]->listeners[k]->name == deletedSurface)
                                                      s_pages[s_pageIndex]->broadcasters[i]->listeners.erase(s_pages[s_pageIndex]->broadcasters[i]->listeners.begin() + k);
                                         }
                                     }
                                     
-                                    for (int i = s_pages[s_pageIndex]->surfaces.size() - 1; i >= 0; --i)
+                                    for (int i = (int) s_pages[s_pageIndex]->surfaces.size() - 1; i >= 0; --i)
                                         if ( s_pages[s_pageIndex]->surfaces[i]->pageSurface == deletedSurface)
                                             s_pages[s_pageIndex]->surfaces.erase(s_pages[s_pageIndex]->surfaces.begin() + i);
 
@@ -3743,7 +3743,7 @@ WDL_DLGRET dlgProcMainConfig(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
                     PropertyList pList;
                     vector<string> properties;
                     properties.push_back(line.c_str());
-                    GetPropertiesFromTokens(0, tokens.size(), tokens, pList);
+                    GetPropertiesFromTokens(0, (int) tokens.size(), tokens, pList);
 
                     if (const char *surfaceTypeProp = pList.get_prop(PropertyType_SurfaceType))
                     {

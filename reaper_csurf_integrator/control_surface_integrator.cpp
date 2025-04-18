@@ -1223,7 +1223,7 @@ void CSurfIntegrator::Init()
             if (tokens.size() > 0) // ignore comment lines and blank lines
             {
                 PropertyList pList;
-                GetPropertiesFromTokens(0, tokens.size(), tokens, pList);
+                GetPropertiesFromTokens(0, (int) tokens.size(), tokens, pList);
                 
                 if (const char *typeProp = pList.get_prop(PropertyType_SurfaceType))
                 {
@@ -1727,7 +1727,6 @@ void ActionContext::LogAction(double value)
 {
     if (g_debugLevel >= DEBUG_LEVEL_INFO)
     {
-        char contextParams[128];
         std::ostringstream oss;
         if (supportsColor_) {
             oss << " { ";
@@ -1790,7 +1789,7 @@ void ActionContext::RunDeferredActions()
     if (holdDelayMs_ > 0
         && holdActive_
         && lastHoldStartTs_ > 0
-        && GetTickCount() > (lastHoldStartTs_ + holdDelayMs_)
+        && (int) GetTickCount() > (lastHoldStartTs_ + holdDelayMs_)
     ) {
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldStartTs_);
         PerformAction(deferredValue_);
@@ -1803,7 +1802,7 @@ void ActionContext::RunDeferredActions()
     if (holdRepeatIntervalMs_ > 0
         && holdRepeatActive_
         && lastHoldRepeatTs_ > 0
-        && GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
+        && (int) GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
     ) {
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] REPEAT [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldRepeatTs_);
         lastHoldRepeatTs_ = GetTickCount();
@@ -2039,9 +2038,16 @@ void ActionContext::GetSteppedValues(Widget *widget, Action *action,  Zone *zone
         if (stepSize != 0.0)
         {
             stepSize *= 10000.0;
-            int baseTickCount = csi_->GetBaseTickCount((int)steppedValues.size());
+
+            int stepCount = (int) steppedValues.size();
+            int baseTickCount = (NUM_ELEM(s_tickCounts_) > stepCount)
+                ? s_tickCounts_[stepCount]
+                : s_tickCounts_[NUM_ELEM(s_tickCounts_) - 1]
+            ;
             int tickCount = int(baseTickCount / stepSize + 0.5);
             acceleratedTickValues.push_back(tickCount);
+
+
         }
     }
 }
@@ -3277,7 +3283,7 @@ void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latch
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 void TrackNavigationManager::RebuildTracks()
 {
-    int oldTracksSize = tracks_.size();
+    int oldTracksSize = (int) tracks_.size();
     
     tracks_.clear();
     
@@ -3303,7 +3309,7 @@ void TrackNavigationManager::RebuildSelectedTracks()
     if (currentTrackVCAFolderMode_ != 3)
         return;
 
-    int oldTracksSize = selectedTracks_.size();
+    int oldTracksSize = (int) selectedTracks_.size();
     
     selectedTracks_.clear();
     

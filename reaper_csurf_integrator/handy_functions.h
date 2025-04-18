@@ -9,8 +9,13 @@
 
 #include "../WDL/db2val.h"
 
+#ifdef _DEBUG
+  #if defined(__cpp_lib_stacktrace)
 #include <stacktrace>
+  #endif
+#endif
 #include <iostream>
+#include <vector>
 
 static double int14ToNormalized(unsigned char msb, unsigned char lsb)
 {
@@ -60,11 +65,11 @@ enum DebugLevel {
 template <typename... Args>
 static void LogToConsole(int size, const char* format, Args... args)
 {
-    std::vector<char> buffer(size);
-    std::snprintf(buffer.data(), buffer.size(), format, args...);
+    vector<char> buffer(size);
+    snprintf(buffer.data(), buffer.size(), format, args...);
     ShowConsoleMsg(buffer.data());
 #ifdef _DEBUG
-    std::ofstream logFile(std::string(GetResourcePath()) + "/CSI/CSI.log", std::ios::app);
+    ofstream logFile(string(GetResourcePath()) + "/CSI/CSI.log", ios::app);
     if (logFile.is_open())
     {
         char timeStr[32];
@@ -79,7 +84,7 @@ static void LogToConsole(int size, const char* format, Args... args)
 }
 
 static void LogStackTraceToConsole() {
-// to enable std::stacktrace change LanguageStandard to stdcpp23
+// to enable stacktrace change LanguageStandard to stdcpp23
 // Windows\reaper_csurf_integrator\reaper_csurf_integrator\reaper_csurf_integrator.vcxproj
 //   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
 //     <ClCompile>
@@ -92,20 +97,20 @@ static void LogStackTraceToConsole() {
 //   </ItemDefinitionGroup>
 #ifdef _DEBUG
   #if defined(__cpp_lib_stacktrace)
-    auto trace = std::stacktrace::current();
+    auto trace = stacktrace::current();
     LogToConsole(256, "===== Stack Trace Start =====\n");
     for (const auto& frame : trace) {
-        std::stringstream ss;
+        stringstream ss;
         ss << frame;
-        std::string line = ss.str();
-        if (line.find('\\') != std::string::npos || line.find('/') != std::string::npos)
+        string line = ss.str();
+        if (line.find('\\') != string::npos || line.find('/') != string::npos)
         {
             size_t pos = 0;
-            while ((pos = line.find("reaper_csurf_integrator!", pos)) != std::string::npos)
+            while ((pos = line.find("reaper_csurf_integrator!", pos)) != string::npos)
                 line.replace(pos, 24, "");
 
             pos = line.find("+0x");
-            if (pos != std::string::npos)
+            if (pos != string::npos)
                 line = line.substr(0, pos);
 
             LogToConsole(1024, "%s\n", line.c_str());
@@ -121,9 +126,9 @@ static void LogStackTraceToConsole() {
 static const char* GetRelativePath(const char* absolutePath)
 {
     const char* resourcePath = GetResourcePath();
-    size_t resourcePathLen = std::strlen(resourcePath);
+    size_t resourcePathLen = strlen(resourcePath);
 
-    if (std::strncmp(absolutePath, resourcePath, resourcePathLen) == 0)
+    if (strncmp(absolutePath, resourcePath, resourcePathLen) == 0)
     {
         const char* rel = absolutePath + resourcePathLen;
         if (*rel == '/' || *rel == '\\')

@@ -416,7 +416,7 @@ public:
   }
     
   Message &pushStr(const char *s) {
-    int sSize = strlen(s);
+    int sSize = (int) strlen(s);
     assert(sSize < 2147483647); // insane values are not welcome
     type_tags += TYPE_TAG_STRING;
     arguments.push_back(std::make_pair(storage.size(), sSize + 1));
