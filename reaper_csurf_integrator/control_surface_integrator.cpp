@@ -1024,6 +1024,7 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("ToggleUseLocalModifiers", make_unique<ToggleUseLocalModifiers>()));
     actions_.insert(make_pair("ToggleUseLocalFXSlot", make_unique<ToggleUseLocalFXSlot>()));
     actions_.insert(make_pair("SetLatchTime", make_unique<SetLatchTime>()));
+    actions_.insert(make_pair("SetHoldTime", make_unique<SetHoldTime>()));
     actions_.insert(make_pair("ToggleEnableFocusedFXMapping", make_unique<ToggleEnableFocusedFXMapping>()));
     actions_.insert(make_pair("DisableFocusedFXMapping", make_unique<DisableFocusedFXMapping>()));
     actions_.insert(make_pair("ToggleEnableLastTouchedFXParamMapping", make_unique<ToggleEnableLastTouchedFXParamMapping>()));
@@ -2584,7 +2585,7 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
 
 static ModifierManager s_modifierManager(NULL);
 
-void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &isDecrease, bool &isIncrease)
+void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &isDecrease, bool &isIncrease)
 {
     vector<string> tokens;
     GetTokens(tokens, line, '+');
@@ -2599,11 +2600,12 @@ void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidg
                 modifier += 1;
             else if (tokens[i] == "Toggle")
                 modifier += 2;
-
             else if (tokens[i] == "Invert")
                 isValueInverted = true;
             else if (tokens[i] == "InvertFB")
                 isFeedbackInverted = true;
+            else if (tokens[i] == "Hold")
+                hasHoldModifier = true;
             else if (tokens[i] == "Decrease")
                 isDecrease = true;
             else if (tokens[i] == "Increase")
@@ -2754,10 +2756,11 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 int modifier = 0;
                 bool isValueInverted = false;
                 bool isFeedbackInverted = false;
+                bool hasHoldModifier = false;
                 bool isDecrease = false;
                 bool isIncrease = false;
                 
-                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, isDecrease, isIncrease);
+                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, isDecrease, isIncrease);
                 
                 Widget *widget = GetSurface()->GetWidgetByName(widgetName);
                                             
@@ -2782,6 +2785,9 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                     
                 if (isFeedbackInverted)
                     context->SetIsFeedbackInverted();
+                
+                if (hasHoldModifier && context->GetHoldDelay() == 0)
+                    context->SetHoldDelay(holdDelayDefaultMs_);
                 
                 vector<double> range;
                 

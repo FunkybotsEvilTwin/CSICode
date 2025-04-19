@@ -552,6 +552,8 @@ public:
     
     void SetIsValueInverted() { isValueInverted_ = true; }
     void SetIsFeedbackInverted() { isFeedbackInverted_ = true; }
+    void SetHoldDelay(int value) { holdDelayMs_ = value; }
+    int GetHoldDelay() { return holdDelayMs_; }
     
     void SetAction(Action *action) { action_ = action; RequestUpdate(); }
     void DoAction(double value);
@@ -1031,6 +1033,8 @@ private:
     
     map<const string, CSIZoneInfo> zoneInfo_;
         
+    int holdDelayDefaultMs_ = 1000;
+        
     shared_ptr<Zone> learnFocusedFXZone_ = NULL;
 
     unique_ptr<Zone> homeZone_;
@@ -1067,7 +1071,7 @@ private:
 
     void GoFXSlot(MediaTrack *track, Navigator *navigator, int fxSlot);
     void GoSelectedTrackFX();
-    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &isDecrease, bool &isIncrease);
+    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &isDecrease, bool &isIncrease);
     void GetNavigatorsForZone(const char *zoneName, const char *navigatorName, vector<Navigator *> &navigators);
     void LoadZones(vector<unique_ptr<Zone>> &zones, vector<string> &zoneList);
          
@@ -1300,6 +1304,8 @@ public:
     }
     
     void Initialize();
+    
+    void SetHoldDelayDefault(int value) { holdDelayDefaultMs_ = value; }
     
     Navigator *GetNavigatorForTrack(MediaTrack* track);
     Navigator *GetMasterTrackNavigator();

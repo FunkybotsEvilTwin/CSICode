@@ -67,7 +67,7 @@ public:
         for (size_t i = 0; i < commandsCount; ++i) {
             if (reloadingCommands[i] == commandID) {
                 auto commandText = DAW::GetCommandName(commandID);
-                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING after command '%d' ('%s'), ", commandID, commandText);
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING after command '%d' ('%s')\n", commandID, commandText);
                 throw ReloadPluginException(commandText);
             }
         }
