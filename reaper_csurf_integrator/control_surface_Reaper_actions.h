@@ -9,235 +9,344 @@
 
 #include "control_surface_action_contexts.h"
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// class FXParam : public FXAction
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 class FXParam : public FXAction
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual const char *GetName() override { return "FXParam"; }
-    
-    virtual void Do(ActionContext *context, double value) override
+    virtual const char* GetName() override { return "FXParam"; }
+
+    virtual void Do(ActionContext* context, double value) override
     {
-        if (MediaTrack *track = context->GetTrack())
+        if (MediaTrack* track = context->GetTrack())
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+            TrackFX_SetParamNormalized(track, context->GetSlotIndex(), context->GetParamIndex(), value);
+#else
             TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), value);
+#endif
     }
-    
-    virtual void Touch(ActionContext *context, double value) override
+
+    virtual void Touch(ActionContext* context, double value) override
     {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            double min, max = 0;
-            
+        if (MediaTrack* track = context->GetTrack())
             if (value == 0)
                 TrackFX_EndParamEdit(track, context->GetSlotIndex(), context->GetParamIndex());
             else
-                TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max));
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+                TrackFX_SetParamNormalized(track, context->GetSlotIndex(), context->GetParamIndex(),
+                    TrackFX_GetParamNormalized(track, context->GetSlotIndex(), context->GetParamIndex()));
+#else
+        {
+            double min, max;
+            TrackFX_SetParam(track,
+                context->GetSlotIndex(),
+                context->GetParamIndex(),
+                TrackFX_GetParam(track,
+                    context->GetSlotIndex(),
+                    context->GetParamIndex(),
+                    &min, &max));
         }
+#endif
     }
 };
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// class JSFXParam : public FXAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class JSFXParam : public FXAction
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual const char *GetName() override { return "JSFXParam"; }
-    
-    virtual double GetCurrentNormalizedValue(ActionContext *context) override
+    virtual const char* GetName() override { return "JSFXParam"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override
     {
-        if (MediaTrack *track = context->GetTrack())
+        if (MediaTrack* track = context->GetTrack())
         {
-            double min, max = 0.0;
-            
-            double value =  TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max);
-            
+#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
+            // use host's normalized getter
+            return TrackFX_GetParamNormalized(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex()
+            );
+#else
+            // fallback: manual raw->normalized
+            double raw = 0.0, min = 0.0, max = 0.0;
+            raw = TrackFX_GetParam(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex(),
+                &min,
+                &max
+            );
             double range = max - min;
-            
-            if (min < 0)
-                value += fabs(min);
-
-            return value / range;
+            if (range <= 0.0) return 0.0;
+            if (min < 0.0) raw += fabs(min);
+            return raw / range;
+#endif
         }
-        else
-            return 0.0;
-    }
-   
-    virtual void RequestUpdate(ActionContext *context) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            double min, max = 0.0;
-
-            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
-            if (context->GetNumberOfSteppedValues() > 0)
-                context->UpdateJSFXWidgetSteppedValue(TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max));
-        }
-        else
-            context->ClearWidget();
-    }
-
-    virtual void Do(ActionContext *context, double value) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            if (context->GetNumberOfSteppedValues() > 0)
-                TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), value);
-
-            else
-            {
-                double min, max = 0.0;
-                
-                TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max);
-                
-                double range = max - min;
-                
-                TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), value  *range + min);
-            }
-        }
-    }
-    
-    virtual void Touch(ActionContext *context, double value) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            double min, max = 0;
-            
-            if (value == 0)
-                TrackFX_EndParamEdit(track, context->GetSlotIndex(), context->GetParamIndex());
-            else
-                TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max));
-        }
-    }
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TCPFXParam : public FXAction
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-{
-public:
-    virtual const char *GetName() override { return "TCPFXParam"; }
-    
-    virtual double GetCurrentNormalizedValue(ActionContext *context) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            int index = context->GetIntParam();
-            
-            if (CountTCPFXParms(NULL, track) > index)
-            {
-                int fxIndex = 0;
-                int paramIndex = 0;
-                
-                if (GetTCPFXParm(NULL, track, index, &fxIndex, &paramIndex))
-                {
-                    double min, max = 0.0;
-                    
-                    return TrackFX_GetParam(track, fxIndex, paramIndex, &min, &max);
-                }
-                else
-                    return 0.0;
-            }
-            else
-                return 0.0;
-        }
-        else
-            return 0.0;
-    }
-
-    virtual void Do(ActionContext *context, double value) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            int index = context->GetIntParam();
-            
-            if (CountTCPFXParms(NULL, track) > index)
-            {
-                int fxIndex = 0;
-                int paramIndex = 0;
-                
-                if (GetTCPFXParm(NULL, track, index, &fxIndex, &paramIndex))
-                    TrackFX_SetParam(track, fxIndex, paramIndex, value);
-            }
-        }
-    }
-    
-    virtual void Touch(ActionContext *context, double value) override
-    {
-        /*
-        if (MediaTrack *track = context->GetTrack())
-        {
-            double min, max = 0;
-            
-            if (value == 0)
-                DAW::TrackFX_EndParamEdit(track, context->GetSlotIndex(), context->GetParamIndex());
-            else
-                TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max));
-        }
-         */
-    }
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class LastTouchedFXParam : public FXAction
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-{
-public:
-    virtual const char *GetName() override { return "LastTouchedFXParam"; }
-   
-    virtual double GetCurrentNormalizedValue(ActionContext *context) override
-    {
-        double min = 0.0;
-        double max = 0.0;
-        int trackNum = 0;
-        int fxSlotNum = 0;
-        int fxParamNum = 0;
-        
-        if (GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum))
-            if (MediaTrack *track = DAW::GetTrack(trackNum))
-                return TrackFX_GetParam(track, fxSlotNum, fxParamNum, &min, &max);
-        
         return 0.0;
     }
 
-    virtual void RequestUpdate(ActionContext *context) override
+    virtual void RequestUpdate(ActionContext* context) override
     {
-        double min = 0.0;
-        double max = 0.0;
-        int trackNum = 0;
-        int fxSlotNum = 0;
-        int fxParamNum = 0;
-
-        if (GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum))
-            if (MediaTrack *track = DAW::GetTrack(trackNum))
-                context->UpdateWidgetValue(TrackFX_GetParam(track, fxSlotNum, fxParamNum, &min, &max));
-    }
-    
-    virtual void Do(ActionContext *context, double value) override
-    {
-        int trackNum = 0;
-        int fxSlotNum = 0;
-        int fxParamNum = 0;
-
-        if (GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum))
-            if (MediaTrack *track = DAW::GetTrack(trackNum))
-                TrackFX_SetParam(track, fxSlotNum, fxParamNum, value);
-    }
-    
-    virtual void Touch(ActionContext *context, double value) override
-    {
-        int trackNum = 0;
-        int fxSlotNum = 0;
-        int fxParamNum = 0;
-
-        if (GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum))
+        if (MediaTrack* track = context->GetTrack())
         {
-            if (MediaTrack *track =  DAW::GetTrack(trackNum))
+            // update main widget
+            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
+
+            // update stepped display if needed
+            if (context->GetNumberOfSteppedValues() > 0)
             {
-                if (value == 0)
-                    TrackFX_EndParamEdit(track, fxSlotNum, fxParamNum);
-                else
-                    TrackFX_SetParam(track, fxSlotNum, fxParamNum, GetCurrentNormalizedValue(context));
+#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
+                // normalized getter
+                context->UpdateJSFXWidgetSteppedValue(
+                    TrackFX_GetParamNormalized(
+                        track,
+                        context->GetSlotIndex(),
+                        context->GetParamIndex()
+                    )
+                );
+#else
+                // raw getter + remap to 0-1
+                double raw = 0.0, min = 0.0, max = 0.0;
+                raw = TrackFX_GetParam(
+                    track,
+                    context->GetSlotIndex(),
+                    context->GetParamIndex(),
+                    &min,
+                    &max
+                );
+                double range = max - min;
+                double norm = (range > 0.0) ? ((raw - min) / range) : 0.0;
+                context->UpdateJSFXWidgetSteppedValue(norm);
+#endif
             }
+        }
+        else
+        {
+            context->ClearWidget();
+        }
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+        {
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+            // normalized setter
+            TrackFX_SetParamNormalized(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex(),
+                value
+            );
+#else
+            // fallback: raw setter with manual range mapping
+            double min = 0.0, max = 0.0;
+            TrackFX_GetParam(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex(),
+                &min,
+                &max
+            );
+            double raw = min + value * (max - min);
+            TrackFX_SetParam(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex(),
+                raw
+            );
+#endif
+        }
+    }
+
+    virtual void Touch(ActionContext* context, double value) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+        {
+            if (value == 0.0)
+            {
+                TrackFX_EndParamEdit(
+                    track,
+                    context->GetSlotIndex(),
+                    context->GetParamIndex()
+                );
+            }
+            else
+            {
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+                // re-apply current normalized value
+                TrackFX_SetParamNormalized(
+                    track,
+                    context->GetSlotIndex(),
+                    context->GetParamIndex(),
+                    GetCurrentNormalizedValue(context)
+                );
+#else
+                // fallback: re-apply raw
+                double min = 0.0, max = 0.0;
+                double raw = TrackFX_GetParam(
+                    track,
+                    context->GetSlotIndex(),
+                    context->GetParamIndex(),
+                    &min,
+                    &max
+                );
+                TrackFX_SetParam(
+                    track,
+                    context->GetSlotIndex(),
+                    context->GetParamIndex(),
+                    raw
+                );
+#endif
+            }
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// class TCPFXParam : public FXAction
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class TCPFXParam : public FXAction
+{
+public:
+    virtual const char* GetName() override { return "TCPFXParam"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+        {
+            int index = context->GetIntParam();
+            if (CountTCPFXParms(NULL, track) > index)
+            {
+                int fxIndex = 0, paramIndex = 0;
+                if (GetTCPFXParm(NULL, track, index, &fxIndex, &paramIndex))
+                {
+#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
+                    return TrackFX_GetParamNormalized(track, fxIndex, paramIndex);
+#else
+                    double raw = TrackFX_GetParam(track, fxIndex, paramIndex, &min, &max);
+                    double range = max - min;
+                    return (range > 0.0) ? ((raw - min) / range) : 0.0;
+#endif
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+        {
+            int index = context->GetIntParam();
+            if (CountTCPFXParms(NULL, track) > index)
+            {
+                int fxIndex = 0, paramIndex = 0;
+                if (GetTCPFXParm(NULL, track, index, &fxIndex, &paramIndex))
+                {
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+                    TrackFX_SetParamNormalized(track, fxIndex, paramIndex, value);
+#else
+                    TrackFX_SetParam(track, fxIndex, paramIndex, value);
+#endif
+                }
+            }
+        }
+    }
+
+    virtual void Touch(ActionContext* context, double value) override
+    {
+        // no-op
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// class LastTouchedFXParam : public FXAction
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class LastTouchedFXParam : public FXAction
+{
+public:
+    virtual const char* GetName() override { return "LastTouchedFXParam"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override
+    {
+        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
+        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return 0.0;
+        MediaTrack* track = DAW::GetTrack(trackNum);
+        if (!track) return 0.0;
+#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
+        return TrackFX_GetParamNormalized(track, fxSlotNum, fxParamNum);
+#else
+        double raw = 0.0, min = 0.0, max = 0.0;
+        raw = TrackFX_GetParam(track, fxSlotNum, fxParamNum, &min, &max);
+        double range = max - min;
+        return (range > 0.0) ? ((raw - min) / range) : 0.0;
+#endif
+    }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
+        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum))
+        {
+            context->ClearWidget();
+            return;
+        }
+        MediaTrack* track = DAW::GetTrack(trackNum);
+        if (!track) { context->ClearWidget(); return; }
+#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
+        context->UpdateWidgetValue(
+            TrackFX_GetParamNormalized(track, fxSlotNum, fxParamNum)
+        );
+#else
+        double raw = 0.0, min = 0.0, max = 0.0;
+        raw = TrackFX_GetParam(track, fxSlotNum, fxParamNum, &min, &max);
+        double range = max - min;
+        double norm = (range > 0.0) ? ((raw - min) / range) : 0.0;
+        context->UpdateWidgetValue(norm);
+#endif
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
+        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return;
+        MediaTrack* track = DAW::GetTrack(trackNum);
+        if (!track) return;
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+        TrackFX_SetParamNormalized(track, fxSlotNum, fxParamNum, value);
+#else
+        TrackFX_SetParam(track, fxSlotNum, fxParamNum, value);
+#endif
+    }
+
+    virtual void Touch(ActionContext* context, double value) override
+    {
+        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
+        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return;
+        MediaTrack* track = DAW::GetTrack(trackNum);
+        if (!track) return;
+
+        if (value == 0.0)
+            TrackFX_EndParamEdit(track, fxSlotNum, fxParamNum);
+        else
+        {
+#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
+            TrackFX_SetParamNormalized(
+                track, fxSlotNum, fxParamNum,
+                GetCurrentNormalizedValue(context)
+            );
+#else
+            double rawMin = 0.0, rawMax = 0.0;
+            TrackFX_GetParam(track, fxSlotNum, fxParamNum, &rawMin, &rawMax);
+            double norm = GetCurrentNormalizedValue(context);
+            double raw = rawMin + norm * (rawMax - rawMin);
+            TrackFX_SetParam(track, fxSlotNum, fxParamNum, raw);
+#endif
         }
     }
 };

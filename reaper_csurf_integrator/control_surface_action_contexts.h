@@ -7,6 +7,10 @@
 #ifndef control_surface_action_contexts_h
 #define control_surface_action_contexts_h
 
+#define REAPERAPI_WANT_TrackFX_GetParamNormalized
+#define REAPERAPI_WANT_TrackFX_SetParamNormalized
+#include "reaper_plugin_functions.h"
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class NoAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,20 +63,34 @@ public:
     }
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class FXAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "FXAction"; }
-    
+
     virtual double GetCurrentNormalizedValue(ActionContext *context) override
     {
         if (MediaTrack *track = context->GetTrack())
         {
-            double min, max = 0.0;
-            
-            return TrackFX_GetParam(track, context->GetSlotIndex(), context->GetParamIndex(), &min, &max);
+#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
+            return TrackFX_GetParamNormalized(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex()
+            );
+#else
+            double raw = 0.0, min = 0.0, max = 0.0;
+            raw = TrackFX_GetParam(
+                track,
+                context->GetSlotIndex(),
+                context->GetParamIndex(),
+                &min, &max
+            );
+            double range = max - min;
+            return (range > 0.0) ? ((raw - min) / range) : 0.0;
+#endif
         }
         else
             return 0.0;
@@ -83,7 +101,6 @@ public:
         if (MediaTrack *track = context->GetTrack())
         {
             double currentValue = GetCurrentNormalizedValue(context);
-            
             context->UpdateWidgetValue(currentValue);
         }
         else
