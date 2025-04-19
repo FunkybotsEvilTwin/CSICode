@@ -101,6 +101,12 @@ static char *format_number(double v, char *buf, int bufsz)
 
 extern void GetTokens(vector<string> &tokens, const string &line);
 extern void GetTokens(vector<string> &tokens, const string &line, char delimiter);
+
+class ReloadPluginException : public std::runtime_error {
+public:
+    explicit ReloadPluginException(const std::string& message)
+        : std::runtime_error(message) {}
+};
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 enum PropertyType {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -4236,11 +4242,21 @@ public:
         if (currentProject_ != currentProject)
         {
             currentProject_ = currentProject;
-            DAW::SendCommandMessage(41743);
+            DAW::SendCommandMessage(41743); // 
         }
         
-        if (shouldRun_ && pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
-            pages_[currentPageIndex_]->Run();
+        if (shouldRun_ && pages_.size() > currentPageIndex_ && pages_[currentPageIndex_]) {
+            try {
+                pages_[currentPageIndex_]->Run();
+            } catch (const ReloadPluginException& e) {
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING: : %s\n", e.what());
+            } catch (const std::exception& e) {
+                LogToConsole(256, "[ERROR] # CSurfIntegrator::RUN: %s\n", e.what());
+                LogStackTraceToConsole();
+            }
+        }
+        
+
         /*
          repeats++;
          

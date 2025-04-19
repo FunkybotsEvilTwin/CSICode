@@ -294,7 +294,7 @@ public:
     
     virtual void ForceValue(const PropertyList &properties, double value) override
     {
-        if (value == 0.0)
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE)
         {
             if (midiFeedbackMessage2_.midi_message[0] != 0)
                 ForceMidiMessage(midiFeedbackMessage2_.midi_message[0], midiFeedbackMessage2_.midi_message[1], midiFeedbackMessage2_.midi_message[2]);
@@ -488,48 +488,28 @@ public:
         const char *font = properties.get_prop(PropertyType_Font);
         if (font)
             font_ = atoi(font);
-        
-        if (value == 0)
-        {
-            const char *col = properties.get_prop(PropertyType_BackgroundColorOff);
-            if (col)
-                GetColorValue(col, backgroundColor);
 
-            col = properties.get_prop(PropertyType_TextColorOff);
-            if (col)
-                GetColorValue(col, textColor);
-            
-            if (lastBackgroundColorSent_ == backgroundColor && lastTextColorSent_ == textColor)
-                return;
-            else
-            {
-                lastBackgroundColorSent_ = backgroundColor;
-                lastTextColorSent_ = textColor;
-            }
-        }
+        const char *col = properties.get_prop((value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? PropertyType_BackgroundColorOff : PropertyType_BackgroundColorOn);
+        if (col)
+            GetColorValue(col, backgroundColor);
+
+        col = properties.get_prop((value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? PropertyType_TextColorOff : PropertyType_TextColorOn);
+        if (col)
+            GetColorValue(col, textColor);
+
+        if (lastBackgroundColorSent_ == backgroundColor && lastTextColorSent_ == textColor)
+            return;
         else
         {
-            const char *col = properties.get_prop(PropertyType_BackgroundColorOn);
-            if (col)
-                GetColorValue(col, backgroundColor);
-            col = properties.get_prop(PropertyType_TextColorOn);
-            if (col)
-                GetColorValue(col, textColor);
-            
-            if (lastBackgroundColorSent_ == backgroundColor && lastTextColorSent_ == textColor)
-                return;
-            else
-            {
-                lastBackgroundColorSent_ = backgroundColor;
-                lastTextColorSent_ = textColor;
-            }
+            lastBackgroundColorSent_ = backgroundColor;
+            lastTextColorSent_ = textColor;
         }
+    
         
         const char *displayText = properties.get_prop(PropertyType_DisplayText);
         if (!displayText) displayText = "";
         
-        struct
-        {
+        struct {
             MIDI_event_ex_t evt;
             char data[256];
         } midiSysExData;

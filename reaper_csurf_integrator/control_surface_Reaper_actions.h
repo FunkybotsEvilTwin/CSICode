@@ -3207,8 +3207,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         int mode = context->GetIntParam();
         
@@ -3233,8 +3232,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return;
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -3293,8 +3291,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return;
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
             context->GetPage()->NextInputMonitorMode(track);

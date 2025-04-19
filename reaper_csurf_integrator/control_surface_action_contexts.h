@@ -30,6 +30,11 @@ class ReaperAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
+    static int constexpr CONTROL_SURFACE_REFRESH_ALL_SURFACES = 41743;
+    static int constexpr FILE_NEW_PROJECT = 40023;
+    static int constexpr CLOSE_CURRENT_PROJECT_TAB = 40860;
+    static int constexpr TRACK_INSERT_TRACK_FROM_TEMPLATE = 46000;
+
     virtual const char *GetName() override { return "ReaperAction"; }
    
     virtual void RequestUpdate(ActionContext *context) override
@@ -45,27 +50,27 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-         //FIXME: refactor the logic to support all commands without crashing. "it causes crash -- CSI receives the surface control release message after this but no one is home :)"
-         static const int ignoredCommands[] = { 
-             41743 // Refresh all surfaces
-            ,40023 // Open new project
-            ,40860 // Close current project tab
-            ,46000 // Insert track from template
-        };
-        static const size_t ignoredCommandCount = sizeof(ignoredCommands) / sizeof(int);
-        for (size_t i = 0; i < ignoredCommandCount; ++i)
-        {
-            if (ignoredCommands[i] == context->GetCommandId())
-            {
-                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] Ignoring command '%d' ('%s'), it causes crash", context->GetCommandId(), DAW::GetCommandName(context->GetCommandId()));
-                return;
-            }
-        }
+        int commandID = context->GetCommandId();
         // used for Increase/Decrease
         if (value < 0 && context->GetRangeMinimum() < 0)
-            DAW::SendCommandMessage(context->GetCommandId());
+            DAW::SendCommandMessage(commandID);
         else if (value > 0 && context->GetRangeMinimum() >= 0)
-            DAW::SendCommandMessage(context->GetCommandId());
+            DAW::SendCommandMessage(commandID);
+
+        static const int reloadingCommands[] = {
+            CONTROL_SURFACE_REFRESH_ALL_SURFACES
+            ,FILE_NEW_PROJECT
+            ,CLOSE_CURRENT_PROJECT_TAB
+            ,TRACK_INSERT_TRACK_FROM_TEMPLATE
+        };
+        static const size_t commandsCount = sizeof(reloadingCommands) / sizeof(int);
+        for (size_t i = 0; i < commandsCount; ++i) {
+            if (reloadingCommands[i] == commandID) {
+                auto commandText = DAW::GetCommandName(commandID);
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING after command '%d' ('%s'), ", commandID, commandText);
+                throw ReloadPluginException(commandText);
+            }
+        }
     }
 };
 
