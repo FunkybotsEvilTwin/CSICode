@@ -14,7 +14,6 @@
 #endif
 
 #ifdef _WIN32
-#define _CRT_NONSTDC_NO_DEPRECATE // for Visual Studio versions that want _strdup instead of strdup
 #if _MSC_VER <= 1400
 #define _CRT_SECURE_NO_DEPRECATE
 #endif
@@ -37,17 +36,19 @@
 #include <filesystem>
 #include <map>
 
-#include "../WDL/win32_utf8.h"
-#include "../WDL/ptrlist.h"
-#include "../WDL/queue.h"
+#include "../lib/WDL/WDL/win32_utf8.h"
+#include "../lib/WDL/WDL/ptrlist.h"
+#include "../lib/WDL/WDL/queue.h"
 
 #include "control_surface_integrator_Reaper.h"
 
+#include "handy_functions.h"
+
 #ifdef INCLUDE_LOCALIZE_IMPORT_H
 #define LOCALIZE_IMPORT_PREFIX "csi_"
-#include "../WDL/localize/localize-import.h"
+#include "../lib/WDL/WDL/localize/localize-import.h"
 #endif
-#include "../WDL/localize/localize.h"
+#include "../lib/WDL/WDL/localize/localize.h"
 
 #ifdef _WIN32
 #include "commctrl.h"
@@ -71,6 +72,7 @@ extern void UpdateLearnWindow(ZoneManager *zoneManager);
 extern void InitBlankLearnFocusedFXZone(ZoneManager *zoneManager, Zone *fxZone, MediaTrack *track, int fxSlot);
 extern void ShutdownLearn();
 
+extern int g_debugLevel;
 extern bool g_surfaceRawInDisplay;
 extern bool g_surfaceInDisplay;
 extern bool g_surfaceOutDisplay;
@@ -99,6 +101,12 @@ static char *format_number(double v, char *buf, int bufsz)
 
 extern void GetTokens(vector<string> &tokens, const string &line);
 extern void GetTokens(vector<string> &tokens, const string &line, char delimiter);
+
+class ReloadPluginException : public std::runtime_error {
+public:
+    explicit ReloadPluginException(const std::string& message)
+        : std::runtime_error(message) {}
+};
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 enum PropertyType {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -225,7 +233,11 @@ class PropertyList
         }
         else
         {
+#ifdef WIN32
+          char *v = _strdup(val);
+#else
           char *v = strdup(val);
+#endif
           memcpy(rec, &v, sizeof(v));
           rec[RECLEN-1] = 1;
         }
@@ -293,13 +305,13 @@ class PropertyList
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class CSurfIntegrator;
+class FeedbackProcessor;
 class Widget;
 class Page;
 class ControlSurface;
 class Midi_ControlSurface;
 class OSC_ControlSurface;
 class TrackNavigationManager;
-class FeedbackProcessor;
 class ActionContext;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -479,11 +491,13 @@ private:
     
     bool isValueInverted_ = false;
     bool isFeedbackInverted_ = false;
-    int  holdDelayAmount_ = 0;
-    int  holdRepeatInterval_ = 0;
-    int  lastRepeatTime_ = 0;
-    int  delayStartTime_ = 0;
-    bool delayStartTimeValid_= false;
+
+    int  holdDelayMs_ = 0;
+    int  holdRepeatIntervalMs_ = 0;
+    int  lastHoldRepeatTs_ = 0;
+    int  lastHoldStartTs_ = 0;
+    bool holdActive_= false;
+    bool holdRepeatActive_ = false;
     double deferredValue_ = 0.0;
     
     bool supportsColor_ = false;
@@ -500,7 +514,9 @@ private:
     void GetSteppedValues(Widget *widget, Action *action,  Zone *zone, int paramNumber, const vector<string> &params, const PropertyList &widgetProperties, double &deltaValue, vector<double> &acceleratedDeltaValues, double &rangeMinimum, double &rangeMaximum, vector<double> &steppedValues, vector<int> &acceleratedTickValues);
     void SetColor(const vector<string> &params, bool &supportsColor, bool &supportsTrackColor, vector<rgba_color> &colorValues);
     void GetColorValues(vector<rgba_color> &colorValues, const vector<string> &colors);
+    void LogAction(double value);
 public:
+    static double constexpr BUTTON_RELEASE_MESSAGE_VALUE = 0.0;
     ActionContext(CSurfIntegrator *const csi, Action *action, Widget *widget, Zone *zone, int paramIndex, const vector<string> &params);
 
     virtual ~ActionContext() {}
@@ -534,9 +550,12 @@ public:
     
     void SetIsValueInverted() { isValueInverted_ = true; }
     void SetIsFeedbackInverted() { isFeedbackInverted_ = true; }
+    void SetHoldDelay(int value) { holdDelayMs_ = value; }
+    int GetHoldDelay() { return holdDelayMs_; }
     
     void SetAction(Action *action) { action_ = action; RequestUpdate(); }
     void DoAction(double value);
+    void PerformAction(double value);
     void DoRelativeAction(double value);
     void DoRelativeAction(int accelerationIndex, double value);
     
@@ -565,7 +584,7 @@ public:
     bool    GetProvideFeedback() { return provideFeedback_; }
        
     void SetStringParam(const char *stringParam) 
-    { 
+    {
         stringParam_ = stringParam;
         RequestUpdate();
     }
@@ -823,6 +842,87 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class FeedbackProcessor
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+protected:
+    CSurfIntegrator *const csi_;
+    Widget  *const widget_;
+
+    double lastDoubleValue_ = 0.0;
+    string lastStringValue_;
+    rgba_color lastColor_;
+    
+public:
+    FeedbackProcessor(CSurfIntegrator *const csi, Widget *widget) : csi_(csi), widget_(widget) {}
+    virtual ~FeedbackProcessor() {}
+    virtual const char *GetName()  { return "FeedbackProcessor"; }
+    Widget *GetWidget() { return widget_; }
+    virtual void Configure(const vector<unique_ptr<ActionContext>> &contexts) {}
+    virtual void ForceValue(const PropertyList &properties, double value) {}
+    virtual void ForceValue(const PropertyList &properties, const char * const &value) {}
+    virtual void ForceColorValue(const rgba_color &color) {}
+    virtual void ForceUpdateTrackColors() {}
+    virtual void RunDeferredActions() {}
+    virtual void ForceClear() {}
+    
+    virtual void SetXTouchDisplayColors(const char *colors) {}
+    virtual void RestoreXTouchDisplayColors() {}
+
+    virtual void SetColorValue(const rgba_color &color) {}
+
+    virtual void SetValue(const PropertyList &properties, double value)
+    {
+        if (lastDoubleValue_ != value)
+        {
+            lastDoubleValue_ = value;
+            ForceValue(properties, value);
+        }
+    }
+    
+    virtual void SetValue(const PropertyList &properties, const char * const & value)
+    {
+        if (lastStringValue_ != value)
+        {
+            lastStringValue_ = value;
+            ForceValue(properties, value);
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class Midi_FeedbackProcessor : public FeedbackProcessor
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+protected:
+    Midi_ControlSurface *const surface_;
+    
+    MIDI_event_ex_t lastMessageSent_;
+    MIDI_event_ex_t midiFeedbackMessage1_;
+    MIDI_event_ex_t midiFeedbackMessage2_;
+    
+    Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget) : FeedbackProcessor(csi, widget), surface_(surface) {}
+    
+    Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1) : FeedbackProcessor(csi, widget), surface_(surface), midiFeedbackMessage1_(feedback1) {}
+    
+    Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1, MIDI_event_ex_t feedback2) : FeedbackProcessor(csi, widget), surface_(surface), midiFeedbackMessage1_(feedback1), midiFeedbackMessage2_(feedback2) {}
+    
+    void SendMidiSysExMessage(MIDI_event_ex_t *midiMessage);
+    void SendMidiMessage(int first, int second, int third);
+    void ForceMidiMessage(int first, int second, int third);
+    void LogMessage(char* value);
+
+public:
+    ~Midi_FeedbackProcessor()
+    { }
+    
+    virtual const char *GetName() override { return "Midi_FeedbackProcessor"; }
+};
+
+void ReleaseMidiInput(midi_Input *input);
+void ReleaseMidiOutput(midi_Output *output);
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class Widget
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
@@ -897,7 +997,7 @@ public:
     void SetXTouchDisplayColors(const char *colors);
     void RestoreXTouchDisplayColors();
     void ForceClear();
-    void LogInput(double value);    
+    void LogInput(double value);
 };
 
 ////////////////////////////
@@ -927,6 +1027,8 @@ private:
     vector<unique_ptr<ActionContext>> emptyContexts_;
     
     map<const string, CSIZoneInfo> zoneInfo_;
+        
+    int holdDelayDefaultMs_ = 1000;
         
     shared_ptr<Zone> learnFocusedFXZone_ = NULL;
 
@@ -964,8 +1066,7 @@ private:
 
     void GoFXSlot(MediaTrack *track, Navigator *navigator, int fxSlot);
     void GoSelectedTrackFX();
-    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted,
-                                   bool &isDecrease, bool &isIncrease);
+    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &isDecrease, bool &isIncrease);
     void GetNavigatorsForZone(const char *zoneName, const char *navigatorName, vector<Navigator *> &navigators);
     void LoadZones(vector<unique_ptr<Zone>> &zones, vector<string> &zoneList);
          
@@ -982,6 +1083,7 @@ private:
         {
             ifstream file(filePath);
             
+            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] LoadZoneMetadata: %s\n", GetRelativePath(filePath));
             for (string line; getline(file, line) ; )
             {
                 TrimLine(line);
@@ -1000,11 +1102,10 @@ private:
                 metadata.push_back(line);
             }
         }
-        catch (exception)
+        catch (const std::exception& e)
         {
-            char buffer[250];
-            snprintf(buffer, sizeof(buffer), "Trouble in %s, around line %d\n", filePath, lineNumber);
-            ShowConsoleMsg(buffer);
+            LogToConsole(256, "[ERROR] FAILED to LoadZoneMetadata in %s, around line %d\n", filePath, lineNumber);
+            LogToConsole(2048, "Exception: %s\n", e.what());
         }
     }
     
@@ -1198,6 +1299,8 @@ public:
     }
     
     void Initialize();
+    
+    void SetHoldDelayDefault(int value) { holdDelayDefaultMs_ = value; }
     
     Navigator *GetNavigatorForTrack(MediaTrack* track);
     Navigator *GetMasterTrackNavigator();
@@ -1581,6 +1684,7 @@ public:
                 
     void AddZoneFilePath(const string &name, CSIZoneInfo &zoneInfo)
     {
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] AddZoneFilePath %s\n", GetRelativePath(name.c_str()));
         if (zoneInfo_.find(name) == zoneInfo_.end())
             zoneInfo_[name] = zoneInfo;
         else
@@ -2399,86 +2503,6 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FeedbackProcessor
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-{
-protected:
-    CSurfIntegrator *const csi_;
-    Widget  *const widget_;
-
-    double lastDoubleValue_ = 0.0;
-    string lastStringValue_;
-    rgba_color lastColor_;
-    
-public:
-    FeedbackProcessor(CSurfIntegrator *const csi, Widget *widget) : csi_(csi), widget_(widget) {}
-    virtual ~FeedbackProcessor() {}
-    virtual const char *GetName()  { return "FeedbackProcessor"; }
-    Widget *GetWidget() { return widget_; }
-    virtual void Configure(const vector<unique_ptr<ActionContext>> &contexts) {}
-    virtual void ForceValue(const PropertyList &properties, double value) {}
-    virtual void ForceValue(const PropertyList &properties, const char * const &value) {}
-    virtual void ForceColorValue(const rgba_color &color) {}
-    virtual void ForceUpdateTrackColors() {}
-    virtual void RunDeferredActions() {}
-    virtual void ForceClear() {}
-    
-    virtual void SetXTouchDisplayColors(const char *colors) {}
-    virtual void RestoreXTouchDisplayColors() {}
-
-    virtual void SetColorValue(const rgba_color &color) {}
-
-    virtual void SetValue(const PropertyList &properties, double value)
-    {
-        if (lastDoubleValue_ != value)
-        {
-            lastDoubleValue_ = value;
-            ForceValue(properties, value);
-        }
-    }
-    
-    virtual void SetValue(const PropertyList &properties, const char * const & value)
-    {
-        if (lastStringValue_ != value)
-        {
-            lastStringValue_ = value;
-            ForceValue(properties, value);
-        }
-    }
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class Midi_FeedbackProcessor : public FeedbackProcessor
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-{
-protected:
-    Midi_ControlSurface *const surface_;
-    
-    MIDI_event_ex_t lastMessageSent_;
-    MIDI_event_ex_t midiFeedbackMessage1_;
-    MIDI_event_ex_t midiFeedbackMessage2_;
-    
-    Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget) : FeedbackProcessor(csi, widget), surface_(surface) {}
-    
-    Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1) : FeedbackProcessor(csi, widget), surface_(surface), midiFeedbackMessage1_(feedback1) {}
-    
-    Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1, MIDI_event_ex_t feedback2) : FeedbackProcessor(csi, widget), surface_(surface), midiFeedbackMessage1_(feedback1), midiFeedbackMessage2_(feedback2) {}
-    
-    void SendMidiSysExMessage(MIDI_event_ex_t *midiMessage);
-    void SendMidiMessage(int first, int second, int third);
-    void ForceMidiMessage(int first, int second, int third);
-
-public:
-    ~Midi_FeedbackProcessor()
-    { }
-    
-    virtual const char *GetName() override { return "Midi_FeedbackProcessor"; }
-};
-
-void ReleaseMidiInput(midi_Input *input);
-void ReleaseMidiOutput(midi_Output *output);
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class Midi_ControlSurfaceIO
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
@@ -2644,7 +2668,8 @@ public:
     virtual void RequestUpdate() override
     {
         const DWORD now = GetTickCount();
-        if ((now - lastRun_) < (1000/max((surfaceIO_->surfaceRefreshRate_),1))) return;
+        const DWORD threshold = (DWORD) (1000 / max(surfaceIO_->surfaceRefreshRate_, 1));
+        if ((now - lastRun_) < threshold) return;
         lastRun_=now;
 
         surfaceIO_->Run();
@@ -2980,7 +3005,7 @@ protected:
             if (trackOffset_ <  0)
                 trackOffset_ =  0;
             
-            int top = GetNumTracks() - trackNavigators_.size();
+            int top = GetNumTracks() - (int) trackNavigators_.size();
             
             if (trackOffset_ >  top)
                 trackOffset_ = top;
@@ -3184,7 +3209,7 @@ public:
         if (currentTrackVCAFolderMode_ != 0)
             return;
 
-        int numTracks = tracks_.size();
+        int numTracks = (int) tracks_.size();
         
         if (numTracks <= trackNavigators_.size())
             return;
@@ -3194,7 +3219,7 @@ public:
         if (trackOffset_ <  0)
             trackOffset_ =  0;
         
-        int top = numTracks - trackNavigators_.size();
+        int top = numTracks - (int) trackNavigators_.size();
         
         if (trackOffset_ >  top)
             trackOffset_ = top;
@@ -3223,9 +3248,9 @@ public:
         int top = 0;
         
         if (vcaLeadTrack_ == NULL)
-            top = vcaTopLeadTracks_.size() - 1;
+            top = (int) vcaTopLeadTracks_.size() - 1;
         else
-            top = vcaSpillTracks_.size() - 1;
+            top = (int) vcaSpillTracks_.size() - 1;
 
         if (vcaTrackOffset_ >  top)
             vcaTrackOffset_ = top;
@@ -3244,9 +3269,9 @@ public:
         int top = 0;
         
         if (folderParentTrack_ == NULL)
-            top = folderTopParentTracks_.size() - 1;
+            top = (int) folderTopParentTracks_.size() - 1;
         else
-            top = folderSpillTracks_.size() - 1;
+            top = (int) folderSpillTracks_.size() - 1;
         
         if (folderTrackOffset_ > top)
             folderTrackOffset_ = top;
@@ -3262,7 +3287,7 @@ public:
         if (selectedTracksOffset_ < 0)
             selectedTracksOffset_ = 0;
         
-        int top = selectedTracks_.size() - 1;
+        int top = (int) selectedTracks_.size() - 1;
         
         if (selectedTracksOffset_ > top)
             selectedTracksOffset_ = top;
@@ -3889,28 +3914,19 @@ public:
                 ShowDuration(surfaces_[i]->GetName(), "Request Update", duration);
             }
             
-            char msgBuffer[250];
-            
-            snprintf(msgBuffer, sizeof(msgBuffer), "Total duration = %d\n\n\n", totalDuration);
-            ShowConsoleMsg(msgBuffer);
+            LogToConsole(256, "Total duration = %d\n\n\n", totalDuration);
         }
     }
     
     
     void ShowDuration(string item, int duration)
     {
-        char msgBuffer[250];
-        
-        snprintf(msgBuffer, sizeof(msgBuffer), "%s - %d microseconds\n", item.c_str(), duration);
-        ShowConsoleMsg(msgBuffer);
+        LogToConsole(256, "%s - %d microseconds\n", item.c_str(), duration);
     }
     
     void ShowDuration(string surface, string item, int duration)
     {
-        char msgBuffer[250];
-        
-        snprintf(msgBuffer, sizeof(msgBuffer), "%s - %s - %d microseconds\n", surface.c_str(), item.c_str(), duration);
-        ShowConsoleMsg(msgBuffer);
+        LogToConsole(256, "%s - %s - %d microseconds\n", surface.c_str(), item.c_str(), duration);
     }
    */
 
@@ -4034,14 +4050,6 @@ public:
       return NULL;
     }
     
-    int GetBaseTickCount(int stepCount)
-    {
-        if (NUM_ELEM(s_tickCounts_) < stepCount)
-            return s_tickCounts_[stepCount];
-        else
-            return s_tickCounts_[NUM_ELEM(s_tickCounts_) - 1];
-    }
-    
     void Speak(const char *phrase)
     {
         static void (*osara_outputMessage)(const char *message);
@@ -4070,7 +4078,11 @@ public:
         if (actions_.find(actionName) != actions_.end())
             return actions_[actionName].get();
         else
+        {
+            LogToConsole(256, "[ERROR] FAILED to GetAction '%s'\n", actionName);
+
             return actions_["NoAction"].get();
+        }
     }
     
     void OnTrackSelection(MediaTrack *track) override
@@ -4231,11 +4243,21 @@ public:
         if (currentProject_ != currentProject)
         {
             currentProject_ = currentProject;
-            DAW::SendCommandMessage(41743);
+            DAW::SendCommandMessage(41743); // 
         }
         
-        if (shouldRun_ && pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
-            pages_[currentPageIndex_]->Run();
+        if (shouldRun_ && pages_.size() > currentPageIndex_ && pages_[currentPageIndex_]) {
+            try {
+                pages_[currentPageIndex_]->Run();
+            } catch (const ReloadPluginException& e) {
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING: : %s\n", e.what());
+            } catch (const std::exception& e) {
+                LogToConsole(256, "[ERROR] # CSurfIntegrator::RUN: %s\n", e.what());
+                LogStackTraceToConsole();
+            }
+        }
+        
+
         /*
          repeats++;
          
@@ -4245,10 +4267,7 @@ public:
          
          int duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() - start;
          
-         char msgBuffer[250];
-         
-         snprintf(msgBuffer, sizeof(msgBuffer), "%d microseconds\n", duration);
-         ShowConsoleMsg(msgBuffer);
+         LogToConsole(256, "%d microseconds\n", duration);
          }
         */
     }
@@ -4269,10 +4288,7 @@ public:
  
  int duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() - start;
  
- char msgBuffer[250];
- 
- snprintf(msgBuffer, sizeof(msgBuffer), "%d microseconds\n", duration);
- ShowConsoleMsg(msgBuffer);
+ LogToConsole(256, "%d microseconds\n", duration);
  
  */
 

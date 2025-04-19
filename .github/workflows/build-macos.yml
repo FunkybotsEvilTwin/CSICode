@@ -1,0 +1,47 @@
+name: Build on macOS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-13
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v2
+
+      - name: Configure CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -DCMAKE_CXX_STANDARD=17
+          -DCMAKE_BUILD_TYPE=Release
+          -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build ${{ github.workspace }}/build --config Release
+
+      - name: Debug Build Output
+        run: find . -name '*.dylib'
+
+      - name: Package Release ZIP
+        run: |
+          mkdir -p Package/UserPlugins
+          cp ./build/reaper_csurf_integrator.dylib Package/UserPlugins/
+          cp -r Scripts Package/
+          cp -r CSI Package/
+          cd Package
+          zip -r ../CSI_MacOS.zip *
+        shell: bash
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CSI_MacOS
+          path: CSI_MacOS.zip

@@ -1,0 +1,46 @@
+name: Build on Windows
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -DCMAKE_CXX_COMPILER=cl
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_BUILD_TYPE=Release
+          -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build ${{ github.workspace }}/build --config Release
+
+      - name: Debug Build Output
+        run: dir /s *.dll
+        shell: cmd
+
+      - name: Package Release ZIP
+        run: |
+          mkdir Package\UserPlugins
+          copy .\build\Release\reaper_csurf_integrator.dll Package\UserPlugins\
+          xcopy Scripts Package\Scripts\ /E /I
+          xcopy CSI Package\CSI\ /E /I
+          cd Package
+          7z a ..\CSI_Windows.zip *
+        shell: cmd
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CSI_Windows
+          path: CSI_Windows.zip

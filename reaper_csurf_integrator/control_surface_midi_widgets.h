@@ -294,7 +294,7 @@ public:
     
     virtual void ForceValue(const PropertyList &properties, double value) override
     {
-        if (value == 0.0)
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE)
         {
             if (midiFeedbackMessage2_.midi_message[0] != 0)
                 ForceMidiMessage(midiFeedbackMessage2_.midi_message[0], midiFeedbackMessage2_.midi_message[1], midiFeedbackMessage2_.midi_message[2]);
@@ -360,6 +360,10 @@ public:
         SendMidiMessage(0x91, midiFeedbackMessage1_.midi_message[1],  color.r);  // only 127 bit allowed in Midi byte 3
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1],  color.g);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1],  color.b);
+
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
 };
 
@@ -484,48 +488,28 @@ public:
         const char *font = properties.get_prop(PropertyType_Font);
         if (font)
             font_ = atoi(font);
-        
-        if (value == 0)
-        {
-            const char *col = properties.get_prop(PropertyType_BackgroundColorOff);
-            if (col)
-                GetColorValue(col, backgroundColor);
 
-            col = properties.get_prop(PropertyType_TextColorOff);
-            if (col)
-                GetColorValue(col, textColor);
-            
-            if (lastBackgroundColorSent_ == backgroundColor && lastTextColorSent_ == textColor)
-                return;
-            else
-            {
-                lastBackgroundColorSent_ = backgroundColor;
-                lastTextColorSent_ = textColor;
-            }
-        }
+        const char *col = properties.get_prop((value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? PropertyType_BackgroundColorOff : PropertyType_BackgroundColorOn);
+        if (col)
+            GetColorValue(col, backgroundColor);
+
+        col = properties.get_prop((value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? PropertyType_TextColorOff : PropertyType_TextColorOn);
+        if (col)
+            GetColorValue(col, textColor);
+
+        if (lastBackgroundColorSent_ == backgroundColor && lastTextColorSent_ == textColor)
+            return;
         else
         {
-            const char *col = properties.get_prop(PropertyType_BackgroundColorOn);
-            if (col)
-                GetColorValue(col, backgroundColor);
-            col = properties.get_prop(PropertyType_TextColorOn);
-            if (col)
-                GetColorValue(col, textColor);
-            
-            if (lastBackgroundColorSent_ == backgroundColor && lastTextColorSent_ == textColor)
-                return;
-            else
-            {
-                lastBackgroundColorSent_ = backgroundColor;
-                lastTextColorSent_ = textColor;
-            }
+            lastBackgroundColorSent_ = backgroundColor;
+            lastTextColorSent_ = textColor;
         }
+    
         
         const char *displayText = properties.get_prop(PropertyType_DisplayText);
         if (!displayText) displayText = "";
         
-        struct
-        {
+        struct {
             MIDI_event_ex_t evt;
             char data[256];
         } midiSysExData;
@@ -983,6 +967,9 @@ public:
         midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF7;
         
         SendMidiSysExMessage(&midiSysExData.evt);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
 };
 
@@ -1016,6 +1003,9 @@ public:
         SendMidiMessage(0x91, midiFeedbackMessage1_.midi_message[1], color.r / 2);  // only 127 bit allowed in Midi byte 3
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1], color.g / 2);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1], color.b / 2);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
 };
 
@@ -1054,6 +1044,9 @@ public:
         SendMidiMessage(0x91, midiFeedbackMessage1_.midi_message[1], color.r / 2);  // max 127 allowed in Midi byte 3
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1], color.g / 2);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1], color.b / 2);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+        }
     }
     
     virtual void ForceUpdateTrackColors() override
@@ -1934,9 +1927,9 @@ private:
     {
         // Doing a RGB to HSV conversion since HSV is better for light
         // Converting RGB to floats between 0 and 1.0 (percentage)
-        float rf = r / 255.0;
-        float gf = g / 255.0;
-        float bf = b / 255.0;
+        float rf = (float) r / 255.0f;
+        float gf = (float) g / 255.0f;
+        float bf = (float) b / 255.0f;
 
         // Hue will be between 0 and 360 to represent the color wheel.
         // Saturation and Value are a percentage (between 0 and 1.0)
@@ -1960,9 +1953,9 @@ private:
         if (rf >= v)
             h = (gf - bf) / delta;
         else if (gf >= v)
-            h = ((bf - rf) / delta) + 2.0;
+            h = ((bf - rf) / delta) + 2.0f;
         else
-            h = ((rf - gf) / delta) + 4.0;
+            h = ((rf - gf) / delta) + 4.0f;
 
         h *= 60.0;
         if (h < 0)
@@ -2841,18 +2834,21 @@ public:
             SendMidiMessage(color.r, color.g, color.b);
         else
         {
-            int colour = GetColorIntFromRGB(color.r, color.g, color.b);
+            int colorInt = GetColorIntFromRGB(color.r, color.g, color.b);
             // Originally, if the converted MIDI color is 0, it would send a message to turn off the LED.
             // Commenting this out prevents turning off the LED.
-            if (colour == 0)
+            if (colorInt == 0)
             {
                 // SendMidiMessage(midiFeedbackMessage1_.midi_message[0] + 1, midiFeedbackMessage1_.midi_message[1], 17); // turn off led
             }
             else
             {
-                SendMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], colour); // set color
+                SendMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], colorInt); // set color
                 SendMidiMessage(midiFeedbackMessage1_.midi_message[0] + 1, midiFeedbackMessage1_.midi_message[1], 47);  // turn on led max brightness
             }
+        }
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
+            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
 };

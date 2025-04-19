@@ -7,8 +7,6 @@
 #ifndef control_surface_integrator_Reaper_h
 #define control_surface_integrator_Reaper_h
 
-#define WDL_NO_DEFINE_MINMAX
-
 #include "reaper_plugin_functions.h"
 
 using namespace std;
@@ -177,7 +175,16 @@ public:
             return ::GetSetTrackGroupMembershipHigh(track, groupname, 0, 0);
         else
             return 0;
-    }    
+    }
+    
+    static const char* GetCommandName(int cmdID)
+    {
+        const char* actionName = ::kbd_getTextFromCmd(cmdID, ::SectionFromUniqueID(1));
+        if (actionName)
+            return actionName;
+        else
+            return "NOT FOUND!";
+    }
 };
 
 #endif /* control_surface_integrator_Reaper_h */

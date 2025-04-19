@@ -1,5 +1,5 @@
 SRC_PATH = ./reaper_csurf_integrator
-WDL_PATH = ./WDL
+WDL_PATH = ./lib/WDL/WDL
 vpath %.c $(WDL_PATH)
 vpath %.cpp $(WDL_PATH) $(SRC_PATH) $(WDL_PATH)/swell
 vpath %.mm $(WDL_PATH)/swell

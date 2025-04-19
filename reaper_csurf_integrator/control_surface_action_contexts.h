@@ -26,6 +26,11 @@ class ReaperAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
+    static int constexpr CONTROL_SURFACE_REFRESH_ALL_SURFACES = 41743;
+    static int constexpr FILE_NEW_PROJECT = 40023;
+    static int constexpr CLOSE_CURRENT_PROJECT_TAB = 40860;
+    static int constexpr TRACK_INSERT_TRACK_FROM_TEMPLATE = 46000;
+
     virtual const char *GetName() override { return "ReaperAction"; }
    
     virtual void RequestUpdate(ActionContext *context) override
@@ -41,21 +46,27 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        // Reaper actions ignored, as they cause crashes
         int commandID = context->GetCommandId();
-        if  (  commandID == 41743    // Refresh all surfaces", CSI receives the surface control release message after this but no one is home :)
-            || commandID == 40023    // Open new project
-            || commandID == 40860    // Close current project tab
-            || commandID == 46000    // Insert track from template
-            )
-           return;
-
-
         // used for Increase/Decrease
         if (value < 0 && context->GetRangeMinimum() < 0)
-            DAW::SendCommandMessage(context->GetCommandId());
+            DAW::SendCommandMessage(commandID);
         else if (value > 0 && context->GetRangeMinimum() >= 0)
-            DAW::SendCommandMessage(context->GetCommandId());
+            DAW::SendCommandMessage(commandID);
+
+        static const int reloadingCommands[] = {
+            CONTROL_SURFACE_REFRESH_ALL_SURFACES
+            ,FILE_NEW_PROJECT
+            ,CLOSE_CURRENT_PROJECT_TAB
+            ,TRACK_INSERT_TRACK_FROM_TEMPLATE
+        };
+        static const size_t commandsCount = sizeof(reloadingCommands) / sizeof(int);
+        for (size_t i = 0; i < commandsCount; ++i) {
+            if (reloadingCommands[i] == commandID) {
+                auto commandText = DAW::GetCommandName(commandID);
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING after command '%d' ('%s')\n", commandID, commandText);
+                throw ReloadPluginException(commandText);
+            }
+        }
     }
 };
 

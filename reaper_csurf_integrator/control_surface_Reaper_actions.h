@@ -272,7 +272,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
             TrackFX_SetEnabled(track, context->GetSlotIndex(), ! TrackFX_GetEnabled(track, context->GetSlotIndex()));
@@ -335,7 +335,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
             TrackFX_SetOffline(track, context->GetSlotIndex(), ! TrackFX_GetOffline(track, context->GetSlotIndex()));
@@ -1004,7 +1004,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1042,7 +1042,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1078,7 +1078,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1123,7 +1123,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1159,7 +1159,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1194,7 +1194,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1229,7 +1229,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         int currentlySelectedCount = 0;
         int selectedTrackIndex = 0;
@@ -1504,7 +1504,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
             ToggleTrackSendUIMute(track, context->GetSlotIndex() + GetTrackNumSends(track, 1));
@@ -1536,7 +1536,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1572,7 +1572,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1597,7 +1597,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1823,7 +1823,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1859,7 +1859,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1895,7 +1895,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1920,7 +1920,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -1990,7 +1990,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
         {
@@ -2203,7 +2203,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
         {
@@ -2354,7 +2354,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
         {
@@ -2793,7 +2793,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         context->GetSurface()->StartRewinding();
     }
@@ -2859,7 +2859,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->StartFastForwarding();
     }
@@ -2892,7 +2892,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->Play();
     }
@@ -2925,7 +2925,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->Stop();
     }
@@ -2958,7 +2958,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->Record();
     }
@@ -2982,7 +2982,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
             context->GetPage()->ToggleVCASpill(track);
@@ -3007,7 +3007,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
             context->GetPage()->ToggleFolderSpill(track);
@@ -3033,7 +3033,7 @@ public:
     
     void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         SoloAllTracks(0);
     }
@@ -3061,7 +3061,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         SetGlobalAutomationOverride(context->GetIntParam());
     }
@@ -3098,8 +3098,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         int mode = context->GetIntParam();
         
@@ -3124,8 +3123,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return;
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         if (MediaTrack *track = context->GetTrack())
         {
@@ -3164,7 +3162,7 @@ public:
     
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0) return; // ignore button releases
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         GetSetRepeatEx(NULL, ! GetSetRepeatEx(NULL, -1));
     }
@@ -3184,8 +3182,7 @@ public:
 
     virtual void Do(ActionContext *context, double value) override
     {
-        if (value == 0.0)
-            return;
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
 
         if (MediaTrack *track = context->GetTrack())
             context->GetPage()->NextInputMonitorMode(track);

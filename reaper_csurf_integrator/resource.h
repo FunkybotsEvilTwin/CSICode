@@ -109,6 +109,8 @@
 #define IDC_CHECK_ShowInput             1269
 #define IDC_CHECK_ShowOutput            1270
 #define IDC_CHECK_WriteFXParams         1271
+#define IDC_EDIT_DebugLevel             1272
+#define IDC_LABEL_DebugLevel            1273
 #define IDC_COMBO_Type                  1275
 #define IDC_AcceleratedTickValuesLabel  1277
 #define IDC_AcceleratedDeltaValuesLabel 1278
