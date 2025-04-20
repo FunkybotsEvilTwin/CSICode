@@ -1761,18 +1761,19 @@ void ActionContext::LogAction(double value)
 void ActionContext::DoAction(double value)
 {
     deferredValue_ = (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? 0.0 : value;
+    int holdDelayMs = holdDelayMs_ == HOLD_DELAY_INHERIT_VALUE ? this->GetSurface()->GetHoldTime() : holdDelayMs_;
 
     if (holdRepeatIntervalMs_ > 0) {
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
             holdRepeatActive_ = false;
         } else {
-            if (holdDelayMs_ == 0) {
+            if (holdDelayMs == 0) {
                 holdRepeatActive_ = true;
                 lastHoldRepeatTs_ = GetTickCount();
             }
         }
     }
-    if (holdDelayMs_ > 0) {
+    if (holdDelayMs > 0) {
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
             holdActive_ = false;
         } else {
@@ -1787,10 +1788,12 @@ void ActionContext::DoAction(double value)
 // runs in loop to support button hold/repeat actions
 void ActionContext::RunDeferredActions()
 {
-    if (holdDelayMs_ > 0
+    int holdDelayMs = holdDelayMs_ == HOLD_DELAY_INHERIT_VALUE ? this->GetSurface()->GetHoldTime() : holdDelayMs_;
+
+    if (holdDelayMs > 0
         && holdActive_
         && lastHoldStartTs_ > 0
-        && (int) GetTickCount() > (lastHoldStartTs_ + holdDelayMs_)
+        && (int) GetTickCount() > (lastHoldStartTs_ + holdDelayMs)
     ) {
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldStartTs_);
         PerformAction(deferredValue_);
@@ -2787,7 +2790,7 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                     context->SetIsFeedbackInverted();
                 
                 if (hasHoldModifier && context->GetHoldDelay() == 0)
-                    context->SetHoldDelay(holdDelayDefaultMs_);
+                    context->SetHoldDelay(ActionContext::HOLD_DELAY_INHERIT_VALUE);
                 
                 vector<double> range;
                 
@@ -3253,31 +3256,34 @@ void ModifierManager::RecalculateModifiers()
 
 void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latchTime)
 {
-    if (value && modifiers_[modifier].isEngaged == false)
-    {
-        modifiers_[modifier].isEngaged = value;
-        modifiers_[modifier].pressedTime = GetTickCount();
-    }
-    else
-    {
+    if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
+        const char* modifierName = stringFromModifier(modifier);
         DWORD keyReleasedTime = GetTickCount();
-        
-        if ((keyReleasedTime - modifiers_[modifier].pressedTime) > (DWORD)latchTime)
-        {
-            if (value == 0 && modifiers_[modifier].isEngaged)
-            {
+        DWORD heldTime = keyReleasedTime - modifiers_[modifier].pressedTime;
+        if (heldTime >= (DWORD) latchTime) {
+            if (modifiers_[modifier].isLocked == true) {
+                modifiers_[modifier].isLocked = false;
+                if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] [%s] UNLOCK\n", modifierName);
                 char tmp[256];
-                snprintf(tmp, sizeof(tmp), "%s Unlock", stringFromModifier(modifier));
+                snprintf(tmp, sizeof(tmp), "%s Unlock", modifierName);
                 csi_->Speak(tmp);
             }
-
-            modifiers_[modifier].isEngaged = value;
-        }
-        else
-        {
+            modifiers_[modifier].isEngaged = false;
+        } else {
+            auto modifierName = stringFromModifier(modifier);
+            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] [%s] [LOCK]\n", modifierName);
             char tmp[256];
-            snprintf(tmp, sizeof(tmp), "%s Lock", stringFromModifier(modifier));
+            snprintf(tmp, sizeof(tmp), "%s Lock", modifierName);
             csi_->Speak(tmp);
+            modifiers_[modifier].isLocked = true;
+        }
+        modifiers_[modifier].pressedTime = 0;
+    } else {
+        if (modifiers_[modifier].isEngaged == false) {
+            modifiers_[modifier].isEngaged = true;
+            modifiers_[modifier].pressedTime = GetTickCount();
+        } else {
+            modifiers_[modifier].pressedTime = 0;
         }
     }
     

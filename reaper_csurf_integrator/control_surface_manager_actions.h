@@ -593,7 +593,7 @@ public:
     {
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
-        context->GetSurface()->GetZoneManager()->SetHoldDelayDefault((int) value);
+        context->GetSurface()->SetHoldTime(context->GetIntParam());
     }
 };
 
