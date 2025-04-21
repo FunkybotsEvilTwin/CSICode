@@ -1927,9 +1927,9 @@ private:
     {
         // Doing a RGB to HSV conversion since HSV is better for light
         // Converting RGB to floats between 0 and 1.0 (percentage)
-        float rf = (float) r / 255.0f;
-        float gf = (float) g / 255.0f;
-        float bf = (float) b / 255.0f;
+        float rf = r / 255.0f;
+        float gf = g / 255.0f;
+        float bf = b / 255.0f;
 
         // Hue will be between 0 and 360 to represent the color wheel.
         // Saturation and Value are a percentage (between 0 and 1.0)
