@@ -699,7 +699,7 @@ public:
         
         return buf;
     }
-    // ***** NEW: Free Form Text getter and setter *****
+
     const char* GetFreeFormText() const { return m_freeFormText.c_str(); }
     void SetFreeFormText(const char* text) { m_freeFormText = (text ? text : ""); }
 };
@@ -2274,15 +2274,9 @@ public:
     bool GetListensToModifiers() { return listensToModifiers_; }
     void SetListensToModifiers() { listensToModifiers_ = true; }
 
-    void SetLatchTime(int latchTime) { 
-        
-		LogToConsole(256, "[DEBUG] SetLatchTime %d\n", latchTime);
-        latchTime_ = latchTime; }
-    int GetLatchTime() { 
-        
-		LogToConsole(256, "[DEBUG] GetLatchTime %d\n", latchTime_);
-        return latchTime_; }
-    
+    void SetLatchTime(int latchTime) { latchTime_ = latchTime; }
+    int GetLatchTime() { return latchTime_; }
+
     void SetHoldTime(int value) { holdTimeMs_ = value; }
     int GetHoldTime() { return holdTimeMs_; }
 
