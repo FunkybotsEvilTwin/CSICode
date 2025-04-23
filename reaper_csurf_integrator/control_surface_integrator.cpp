@@ -1025,6 +1025,7 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("ToggleUseLocalFXSlot", make_unique<ToggleUseLocalFXSlot>()));
     actions_.insert(make_pair("SetLatchTime", make_unique<SetLatchTime>()));
     actions_.insert(make_pair("SetHoldTime", make_unique<SetHoldTime>()));
+    actions_.insert(make_pair("SetDoublePressTime", make_unique<SetDoublePressTime>()));
     actions_.insert(make_pair("ToggleEnableFocusedFXMapping", make_unique<ToggleEnableFocusedFXMapping>()));
     actions_.insert(make_pair("DisableFocusedFXMapping", make_unique<DisableFocusedFXMapping>()));
     actions_.insert(make_pair("ToggleEnableLastTouchedFXParamMapping", make_unique<ToggleEnableLastTouchedFXParamMapping>()));
@@ -1766,6 +1767,17 @@ void ActionContext::LogAction(double value)
 // runs once button pressed/released
 void ActionContext::DoAction(double value)
 {
+    if (isDoublePress_) {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+        int nowTs = (int) GetTickCount();
+        if (doublePressStartTs_ == 0 || nowTs > doublePressStartTs_ + GetSurface()->GetDoublePressTime()) {
+            doublePressStartTs_ = nowTs;
+            return;
+        } else {
+            doublePressStartTs_ = 0;
+        }
+    }
+
     deferredValue_ = (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? 0.0 : value;
     int holdDelayMs = holdDelayMs_ == HOLD_DELAY_INHERIT_VALUE ? this->GetSurface()->GetHoldTime() : holdDelayMs_;
 
@@ -2600,7 +2612,7 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
 
 static ModifierManager s_modifierManager(NULL);
 
-void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &isDecrease, bool &isIncrease)
+void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &hasDoublePressModifier, bool &isDecrease, bool &isIncrease)
 {
     vector<string> tokens;
     GetTokens(tokens, line, '+');
@@ -2621,6 +2633,8 @@ void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidg
                 isFeedbackInverted = true;
             else if (tokens[i] == "Hold")
                 hasHoldModifier = true;
+            else if (tokens[i] == "DoublePress")
+                hasDoublePressModifier = true;
             else if (tokens[i] == "Decrease")
                 isDecrease = true;
             else if (tokens[i] == "Increase")
@@ -2772,10 +2786,11 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 bool isValueInverted = false;
                 bool isFeedbackInverted = false;
                 bool hasHoldModifier = false;
+                bool hasDoublePressModifier = false;
                 bool isDecrease = false;
                 bool isIncrease = false;
                 
-                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, isDecrease, isIncrease);
+                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, hasDoublePressModifier, isDecrease, isIncrease);
                 
                 Widget *widget = GetSurface()->GetWidgetByName(widgetName);
                                             
@@ -2803,7 +2818,10 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 
                 if (hasHoldModifier && context->GetHoldDelay() == 0)
                     context->SetHoldDelay(ActionContext::HOLD_DELAY_INHERIT_VALUE);
-
+                
+                if (hasDoublePressModifier)
+                    context->SetDoublePress();
+                
                 vector<double> range;
                 
                 if (isDecrease)
