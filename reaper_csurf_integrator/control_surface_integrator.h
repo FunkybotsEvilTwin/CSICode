@@ -80,6 +80,11 @@ extern bool g_fxParamsWrite;
 
 extern REAPER_PLUGIN_HINSTANCE g_hInst;
 
+static const int REAPER__CONTROL_SURFACE_REFRESH_ALL_SURFACES = 41743;
+static const int REAPER__FILE_NEW_PROJECT = 40023;
+static const int REAPER__CLOSE_CURRENT_PROJECT_TAB = 40860;
+static const int REAPER__TRACK_INSERT_TRACK_FROM_TEMPLATE = 46000;
+
 static const char * const s_CSIName = "CSI";
 static const char * const s_CSIVersionDisplay = "v7.0";
 static const char * const s_MajorVersionToken = "7.0";
@@ -4060,22 +4065,24 @@ public:
     CSurfIntegrator();
     
     ~CSurfIntegrator();
-    
+
     virtual int Extended(int call, void *parm1, void *parm2, void *parm3) override;
     const char *GetTypeString() override;
     const char *GetDescString() override;
     const char *GetConfigString() override; // string of configuration data
 
+    void ResetWidgets()
+    {
+        if (pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
+            pages_[currentPageIndex_]->ForceClear();
+    }
+    
     void Shutdown()
     {
         // GAW -- IMPORTANT
         
         // We want to stop polling
         shouldRun_ = false;
-        
-        // Zero out all Widgets before shutting down
-        if (pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
-            pages_[currentPageIndex_]->ForceClear();
         
         ShutdownLearn();
     }
@@ -4308,7 +4315,7 @@ public:
         if (currentProject_ != currentProject)
         {
             currentProject_ = currentProject;
-            DAW::SendCommandMessage(41743); // 
+            DAW::SendCommandMessage(REAPER__CONTROL_SURFACE_REFRESH_ALL_SURFACES);
         }
         
         if (shouldRun_ && pages_.size() > currentPageIndex_ && pages_[currentPageIndex_]) {
@@ -4316,6 +4323,7 @@ public:
                 pages_[currentPageIndex_]->Run();
             } catch (const ReloadPluginException& e) {
                 if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING: : %s\n", e.what());
+                ResetWidgets();
             } catch (const std::exception& e) {
                 LogToConsole(256, "[ERROR] # CSurfIntegrator::RUN: %s\n", e.what());
                 LogStackTraceToConsole();

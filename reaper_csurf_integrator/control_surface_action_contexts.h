@@ -30,11 +30,6 @@ class ReaperAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    static int constexpr CONTROL_SURFACE_REFRESH_ALL_SURFACES = 41743;
-    static int constexpr FILE_NEW_PROJECT = 40023;
-    static int constexpr CLOSE_CURRENT_PROJECT_TAB = 40860;
-    static int constexpr TRACK_INSERT_TRACK_FROM_TEMPLATE = 46000;
-
     virtual const char *GetName() override { return "ReaperAction"; }
    
     virtual void RequestUpdate(ActionContext *context) override
@@ -66,10 +61,10 @@ public:
             DAW::SendCommandMessage(commandID);
 
         static const int reloadingCommands[] = {
-            CONTROL_SURFACE_REFRESH_ALL_SURFACES
-            ,FILE_NEW_PROJECT
-            ,CLOSE_CURRENT_PROJECT_TAB
-            ,TRACK_INSERT_TRACK_FROM_TEMPLATE
+             REAPER__CONTROL_SURFACE_REFRESH_ALL_SURFACES
+            ,REAPER__FILE_NEW_PROJECT
+            ,REAPER__CLOSE_CURRENT_PROJECT_TAB
+            ,REAPER__TRACK_INSERT_TRACK_FROM_TEMPLATE
         };
         static const size_t commandsCount = sizeof(reloadingCommands) / sizeof(int);
         for (size_t i = 0; i < commandsCount; ++i) {
