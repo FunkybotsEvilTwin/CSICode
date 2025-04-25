@@ -1547,6 +1547,11 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
     if (holdRepeatInterval)
         holdRepeatIntervalMs_ = atoi(holdRepeatInterval);
 
+    const char* runCount = widgetProperties_.get_prop(PropertyType_RunCount);
+    if (runCount)
+        runCount_ = atoi(runCount);
+    if (runCount_ < 1) runCount_ = 1;
+
     for (int i = 0; i < (int)(paramsAndProperties).size(); ++i)
         if (paramsAndProperties[i] == "NoFeedback")
             provideFeedback_ = false;
@@ -1844,9 +1849,10 @@ void ActionContext::PerformAction(double value)
         }
         else steppedValuesIndex_++;
 
-        DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
+        for (int i = 0; i < runCount_; ++i)
+            DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
     }
-    else
+    else for (int i = 0; i < runCount_; ++i)
         DoRangeBoundAction(value);
 }
 
@@ -1882,7 +1888,8 @@ void ActionContext::DoRangeBoundAction(double value)
     if (isValueInverted_)
         value = 1.0 - value;
     
-    action_->Do(this, value);
+    for (int i = 0; i < runCount_; ++i)
+        action_->Do(this, value);
 }
 
 void ActionContext::DoSteppedValueAction(double delta)
@@ -2307,7 +2314,7 @@ void Zone::DoTouch(Widget *widget, const char *widgetName, bool &isUsed, double 
         for (auto &actionContext : GetActionContexts(widget))
             actionContext->DoTouch(value);
     }
-    else
+    else 
     {
         for (auto &includedZone : includedZones_)
             includedZone->DoTouch(widget, widgetName, isUsed, value);

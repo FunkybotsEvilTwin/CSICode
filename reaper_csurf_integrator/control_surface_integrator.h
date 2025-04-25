@@ -143,6 +143,7 @@ enum PropertyType {
   D(Feedback) \
   D(HoldDelay) \
   D(HoldRepeatInterval) \
+  D(RunCount) \
   D(Version) \
   D(SurfaceType) \
   D(SurfaceName) \
@@ -507,6 +508,8 @@ private:
     bool holdActive_= false;
     bool holdRepeatActive_ = false;
     double deferredValue_ = 0.0;
+    
+    int  runCount_ = 1;
     
     bool supportsColor_ = false;
     vector<rgba_color> colorValues_;
