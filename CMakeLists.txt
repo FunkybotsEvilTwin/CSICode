@@ -288,9 +288,13 @@ endif()
 # If these environment variables are NOT set, the build will complete,
 # but signing and notarization will be skipped with a friendly message.
 
+# ------------------------------------------------------------------------------ 
+# Additional Mac-specific: Universal Binary + Code Signing and Notarization
+# ------------------------------------------------------------------------------
+
 if(APPLE)
   # Force building Universal2 binary: Intel + Apple Silicon
-  set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
+  set(CMAKE_OSX_ARCHITECTURE_BUILD "separate" CACHE STRING "" FORCE)
   message(STATUS "Building Universal2 binary for macOS (x86_64 + arm64)")
 
   # Code Signing if identity is set
@@ -314,12 +318,13 @@ if(APPLE)
   if(DEFINED ENV{CSI_NOTARY_USERNAME} AND DEFINED ENV{CSI_NOTARY_PASSWORD} AND DEFINED ENV{CSI_TEAM_ID})
     message(STATUS "Notarization will be submitted to Apple ID: $ENV{CSI_NOTARY_USERNAME}")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-      COMMAND xcrun notarytool submit $<TARGET_FILE:${PROJECT_NAME}> 
-              --apple-id "$ENV{CSI_NOTARY_USERNAME}" 
-              --team-id "$ENV{CSI_TEAM_ID}" 
-              --password "$ENV{CSI_NOTARY_PASSWORD}" 
+      COMMAND ${CMAKE_COMMAND} -E tar "cfv" "$<TARGET_FILE:${PROJECT_NAME}>.zip" --format=zip "$<TARGET_FILE:${PROJECT_NAME}>"
+      COMMAND xcrun notarytool submit "$<TARGET_FILE:${PROJECT_NAME}>.zip"
+              --apple-id "$ENV{CSI_NOTARY_USERNAME}"
+              --team-id "$ENV{CSI_TEAM_ID}"
+              --password "$ENV{CSI_NOTARY_PASSWORD}"
               --wait
-      COMMENT "Apple notarization process started and will wait for completion."
+      COMMENT "Apple notarization process started and will wait for completion (via .zip archive)."
       VERBATIM
     )
   else()
