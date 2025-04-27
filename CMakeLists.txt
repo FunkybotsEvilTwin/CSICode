@@ -258,6 +258,75 @@ else()
   endif()
 endif()
 
+# ------------------------------------------------------------------------------ 
+# Additional Mac-specific: Universal Binary + Code Signing and Notarization
+# ------------------------------------------------------------------------------
+
+# INSTRUCTIONS:
+# If you are building for distribution on macOS and want the output to be
+# Code Signed and Notarized automatically:
+#
+# 1. Ensure your Developer ID Application certificate is installed in your Keychain.
+#
+# 2. Before building, set the following environment variables:
+#
+#    CSI_CODESIGN_IDENTITY   - Your full Developer ID Application identity, e.g.,
+#                              "Developer ID Application: Your Name (TEAMID)"
+#
+#    CSI_NOTARY_USERNAME     - Your Apple ID email (for notarization).
+#
+#    CSI_NOTARY_PASSWORD     - App-specific password or saved keychain reference.
+#
+#    CSI_TEAM_ID             - Your 10-character Apple Developer Team ID.
+#
+# Example (temporary for session):
+#   export CSI_CODESIGN_IDENTITY="Developer ID Application: John Doe (ABCDE12345)"
+#   export CSI_NOTARY_USERNAME="your_email@example.com"
+#   export CSI_NOTARY_PASSWORD="@keychain:CSI_Notarization"
+#   export CSI_TEAM_ID="ABCDE12345"
+#
+# If these environment variables are NOT set, the build will complete,
+# but signing and notarization will be skipped with a friendly message.
+
+if(APPLE)
+  # Force building Universal2 binary: Intel + Apple Silicon
+  set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
+  message(STATUS "Building Universal2 binary for macOS (x86_64 + arm64)")
+
+  # Code Signing if identity is set
+  if(DEFINED ENV{CSI_CODESIGN_IDENTITY})
+    message(STATUS "Code signing will be applied with identity: $ENV{CSI_CODESIGN_IDENTITY}")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND codesign
+              --timestamp
+              --options runtime
+              --force
+              --sign "$ENV{CSI_CODESIGN_IDENTITY}"
+              $<TARGET_FILE:${PROJECT_NAME}>
+      COMMENT "Code signing completed with Developer ID certificate."
+      VERBATIM
+    )
+  else()
+    message(WARNING "Skipping code signing: CSI_CODESIGN_IDENTITY environment variable not set.")
+  endif()
+
+  # Notarization if username, password, and team ID are set
+  if(DEFINED ENV{CSI_NOTARY_USERNAME} AND DEFINED ENV{CSI_NOTARY_PASSWORD} AND DEFINED ENV{CSI_TEAM_ID})
+    message(STATUS "Notarization will be submitted to Apple ID: $ENV{CSI_NOTARY_USERNAME}")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND xcrun notarytool submit $<TARGET_FILE:${PROJECT_NAME}> 
+              --apple-id "$ENV{CSI_NOTARY_USERNAME}" 
+              --team-id "$ENV{CSI_TEAM_ID}" 
+              --password "$ENV{CSI_NOTARY_PASSWORD}" 
+              --wait
+      COMMENT "Apple notarization process started and will wait for completion."
+      VERBATIM
+    )
+  else()
+    message(WARNING "Skipping notarization: CSI_NOTARY_USERNAME, CSI_NOTARY_PASSWORD, or CSI_TEAM_ID environment variables not set.")
+  endif()
+endif()
+
 # ------------------------------------------------------------------------------
 # Determine REAPER_USER_PLUGINS path
 # ------------------------------------------------------------------------------
