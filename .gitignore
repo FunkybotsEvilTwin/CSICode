@@ -40,6 +40,5 @@ reaper_csurf_integrator/res.aps
 cmake-build-win64/
 build/
 .DS_Store
-WDL/
 lib/
 .vs/
