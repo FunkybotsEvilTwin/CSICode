@@ -2,7 +2,7 @@ name: Build on Linux
 
 on:
   push:
-    branches: [ '*' ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
