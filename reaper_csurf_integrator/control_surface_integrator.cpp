@@ -1122,6 +1122,7 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("SpeakTrackSendDestination", make_unique<SpeakTrackSendDestination>()));
     actions_.insert(make_pair("TrackSendVolumeDisplay", make_unique<TrackSendVolumeDisplay>()));
     actions_.insert(make_pair("TrackSendPanDisplay", make_unique<TrackSendPanDisplay>()));
+    actions_.insert(make_pair("TrackSendStereoMonoDisplay", make_unique<TrackSendStereoMonoDisplay>()));
     actions_.insert(make_pair("TrackSendPrePostDisplay", make_unique<TrackSendPrePostDisplay>()));
     actions_.insert(make_pair("TrackReceiveVolume", make_unique<TrackReceiveVolume>()));
     actions_.insert(make_pair("TrackReceiveVolumeDB", make_unique<TrackReceiveVolumeDB>()));
