@@ -2564,6 +2564,33 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class TrackReceiveStereoMonoDisplay : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char *GetName() override { return "TrackReceiveStereoMonoDisplay "; }
+    
+    virtual void RequestUpdate(ActionContext *context) override
+    {
+        if (MediaTrack *track = context->GetTrack())
+        {
+            MediaTrack *srcTrack = (MediaTrack *)GetSetTrackSendInfo(track, -1, context->GetSlotIndex(), "P_SRCTRACK", 0);
+            if (srcTrack)
+            {
+                if (GetTrackSendInfo_Value(track, -1, context->GetSlotIndex(), "B_MONO"))
+                    context->UpdateWidgetValue("mono");
+                else
+                    context->UpdateWidgetValue("stereo");
+            }
+            else
+                context->ClearWidget();
+        }
+        else
+            context->ClearWidget();
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class TrackReceivePrePostDisplay : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
