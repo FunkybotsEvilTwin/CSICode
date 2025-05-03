@@ -1062,6 +1062,7 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("TrackUniqueSelect", make_unique<TrackUniqueSelect>()));
     actions_.insert(make_pair("TrackRangeSelect", make_unique<TrackRangeSelect>()));
     actions_.insert(make_pair("TrackRecordArm", make_unique<TrackRecordArm>()));
+    actions_.insert(make_pair("TrackRecordArmDisplay", make_unique<TrackRecordArmDisplay>()));
     actions_.insert(make_pair("TrackMute", make_unique<TrackMute>()));
     actions_.insert(make_pair("TrackSolo", make_unique<TrackSolo>()));
     actions_.insert(make_pair("ClearAllSolo", make_unique<ClearAllSolo>()));
