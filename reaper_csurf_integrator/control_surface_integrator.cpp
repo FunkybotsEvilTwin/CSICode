@@ -1051,6 +1051,9 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("TrackVCALeaderDisplay", make_unique<TrackVCALeaderDisplay>()));
     actions_.insert(make_pair("TrackToggleFolderSpill", make_unique<TrackToggleFolderSpill>()));
     actions_.insert(make_pair("TrackFolderParentDisplay", make_unique<TrackFolderParentDisplay>()));
+    actions_.insert(make_pair("ToggleFolderView", make_unique<ToggleFolderView>()));
+    actions_.insert(make_pair("TrackSetCurrentFolder", make_unique<TrackSetCurrentFolder>()));
+    actions_.insert(make_pair("SetParentFolderAsCurrent", make_unique<SetParentFolderAsCurrent>()));
     actions_.insert(make_pair("TrackSelect", make_unique<TrackSelect>()));
     actions_.insert(make_pair("TrackUniqueSelect", make_unique<TrackUniqueSelect>()));
     actions_.insert(make_pair("TrackRangeSelect", make_unique<TrackRangeSelect>()));
@@ -3279,22 +3282,94 @@ void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latch
 void TrackNavigationManager::RebuildTracks()
 {
     int oldTracksSize = tracks_.size();
-    
+
     tracks_.clear();
-    
-    for (int i = 1; i <= GetNumTracks(); ++i)
+
+    if (isFolderViewActive_)
     {
-        if (MediaTrack *track = CSurf_TrackFromID(i, followMCP_))
+        parentOfCurrentFolderTrack_ = nullptr;
+        std::vector<MediaTrack*> ancestorStack;
+
+        // Find the parent of the current folder track, and the index of the first track in the folder
+        int trackID = 1;
+        if (currentFolderTrackID_ > 0 && currentFolderTrackID_ < GetNumTracks())
+        {
+            for (; trackID <= GetNumTracks(); trackID++)
+            {
+                MediaTrack* track = CSurf_TrackFromID(trackID, followMCP_);
+                int depthOffset = GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH");
+
+                if (trackID == currentFolderTrackID_)
+                {
+                    if (depthOffset == 1)
+                    {
+                        trackID++; // The next track is the first one in the folder (a folder cannot be empty)
+                    }
+                    else // The currentFolderTrackID_ is not a folder actually
+                    {
+                        if (!ancestorStack.empty())
+                        {
+                            currentFolderTrackID_ = GetIdFromTrack(ancestorStack.back()); // Back to last parent folder
+                            trackID = currentFolderTrackID_ + 1; // Next track is the first one in the folder
+                            ancestorStack.pop_back();
+                        }
+                        else
+                        {
+                            currentFolderTrackID_ = 0; // Back to the root level
+                            trackID = 1;
+                        }
+                    }
+                    break;
+                }
+
+                if (depthOffset > 0)
+                    ancestorStack.push_back(track);
+                else if (depthOffset < 0 && !ancestorStack.empty())
+                    ancestorStack.pop_back();
+            }
+        }
+
+        // Set the parent folder ancestor stack
+        if (!ancestorStack.empty())
+            parentOfCurrentFolderTrack_ = ancestorStack.back();
+
+        // List the tracks in the folder
+        int relativeDepth = 0; // Where 0 is the level of the current folder content
+        for (; trackID <= GetNumTracks(); trackID++)
+        {
+            MediaTrack* track = CSurf_TrackFromID(trackID, followMCP_);
+            if (!track)
+                continue;
+
+            if (relativeDepth == 0 && IsTrackVisible(track, followMCP_))
+                tracks_.push_back(track);
+
+            relativeDepth += static_cast<int>(GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH"));
+
+            // Last track of the folder
+            if (relativeDepth < 0)
+                break;
+        }
+    }
+    else
+    {
+        for (int i = 1; i <= GetNumTracks(); ++i)
+        {
+            MediaTrack* track = CSurf_TrackFromID(i, followMCP_);
+            if (!track)
+                continue;
+
             if (IsTrackVisible(track, followMCP_))
                 tracks_.push_back(track);
+        }
     }
-    
+
     if (tracks_.size() < oldTracksSize)
     {
         for (int i = oldTracksSize; i > tracks_.size(); i--)
             page_->ForceClearTrack(i - trackOffset_);
     }
-    
+
     if (tracks_.size() != oldTracksSize)
         page_->ForceUpdateTrackColors();
 }
