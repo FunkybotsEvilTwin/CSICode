@@ -514,7 +514,7 @@ private:
     bool provideFeedback_= true;
 
     string m_freeFormText;
-    
+
     PropertyList widgetProperties_;
         
     void UpdateTrackColor();
@@ -560,7 +560,7 @@ public:
     void SetIsFeedbackInverted() { isFeedbackInverted_ = true; }
     void SetHoldDelay(int value) { holdDelayMs_ = value; }
     int GetHoldDelay() { return holdDelayMs_; }
-    
+
     void SetAction(Action *action) { action_ = action; RequestUpdate(); }
     void DoAction(double value);
     void PerformAction(double value);
@@ -863,7 +863,7 @@ protected:
     double lastDoubleValue_ = 0.0;
     string lastStringValue_;
     rgba_color lastColor_;
-    
+
 public:
     FeedbackProcessor(CSurfIntegrator *const csi, Widget *widget) : csi_(csi), widget_(widget) {}
     virtual ~FeedbackProcessor() {}
@@ -876,7 +876,7 @@ public:
     virtual void ForceUpdateTrackColors() {}
     virtual void RunDeferredActions() {}
     virtual void ForceClear() {}
-    
+
     virtual void SetXTouchDisplayColors(const char *colors) {}
     virtual void RestoreXTouchDisplayColors() {}
 
@@ -890,7 +890,7 @@ public:
             ForceValue(properties, value);
         }
     }
-    
+
     virtual void SetValue(const PropertyList &properties, const char * const & value)
     {
         if (lastStringValue_ != value)
@@ -907,17 +907,17 @@ class Midi_FeedbackProcessor : public FeedbackProcessor
 {
 protected:
     Midi_ControlSurface *const surface_;
-    
+
     MIDI_event_ex_t lastMessageSent_;
     MIDI_event_ex_t midiFeedbackMessage1_;
     MIDI_event_ex_t midiFeedbackMessage2_;
-    
+
     Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget) : FeedbackProcessor(csi, widget), surface_(surface) {}
-    
+
     Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1) : FeedbackProcessor(csi, widget), surface_(surface), midiFeedbackMessage1_(feedback1) {}
-    
+
     Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1, MIDI_event_ex_t feedback2) : FeedbackProcessor(csi, widget), surface_(surface), midiFeedbackMessage1_(feedback1), midiFeedbackMessage2_(feedback2) {}
-    
+
     void SendMidiSysExMessage(MIDI_event_ex_t *midiMessage);
     void SendMidiMessage(int first, int second, int third);
     void ForceMidiMessage(int first, int second, int third);
@@ -926,7 +926,7 @@ protected:
 public:
     ~Midi_FeedbackProcessor()
     { }
-    
+
     virtual const char *GetName() override { return "Midi_FeedbackProcessor"; }
 };
 
@@ -2999,33 +2999,40 @@ protected:
     
     void ForceScrollLink()
     {
-        // Make sure selected track is visble on the control surface
+        // Make sure selected track is visible on the control surface
         MediaTrack *selectedTrack = GetSelectedTrack();
         
         if (selectedTrack != NULL)
         {
+            // Is the selected track already visible
             for (auto &trackNavigator : trackNavigators_)
                 if (selectedTrack == trackNavigator->GetTrack())
                     return;
             
-            for (int i = 1; i <= GetNumTracks(); ++i)
+            // Find the selected track in the tracks_ list
+            int trackOffsetInList = 0;
+            bool found = false;
+            for (MediaTrack* track : tracks_)
             {
-                if (selectedTrack == GetTrackFromId(i))
+                if (track == selectedTrack)
                 {
-                    trackOffset_ = i - 1;
+                    found = true;
                     break;
                 }
+                ++trackOffsetInList;
             }
-            
-            trackOffset_ -= targetScrollLinkChannel_;
-            
-            if (trackOffset_ <  0)
-                trackOffset_ =  0;
-            
-            int top = GetNumTracks() - (int) trackNavigators_.size();
-            
-            if (trackOffset_ >  top)
-                trackOffset_ = top;
+
+            if (found)
+            {
+                int trackOffset = currentFolderTrackID_ + trackOffsetInList;
+                int maxOffset = tracks_.size() - trackNavigators_.size();
+                if (maxOffset < 0)
+                    maxOffset = 0;
+                maxOffset += currentFolderTrackID_;
+                if (trackOffset > maxOffset)
+                    trackOffset = maxOffset;
+                trackOffset_ = trackOffset;
+            }
         }
     }
     
@@ -4076,7 +4083,7 @@ public:
         if (pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
             pages_[currentPageIndex_]->ForceClear();
     }
-    
+
     void Shutdown()
     {
         // GAW -- IMPORTANT
@@ -4123,7 +4130,7 @@ public:
       if (size==8) return (double *)ret;
       return NULL;
     }
-    
+
     void Speak(const char *phrase)
     {
         static void (*osara_outputMessage)(const char *message);
@@ -4158,7 +4165,7 @@ public:
             return actions_["NoAction"].get();
         }
     }
-    
+
     void OnTrackSelection(MediaTrack *track) override
     {
         if (pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
@@ -4331,7 +4338,7 @@ public:
                 LogStackTraceToConsole();
             }
         }
-        
+
 
         /*
          repeats++;
