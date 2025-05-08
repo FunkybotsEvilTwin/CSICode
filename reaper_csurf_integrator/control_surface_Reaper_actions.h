@@ -3432,6 +3432,70 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class ToggleFolderView : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char *GetName() override { return "ToggleFolderView"; }
+    
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if (context->GetPage()->GetIsFolderViewActive())
+            context->UpdateWidgetValue(1.0);
+        else
+            context->UpdateWidgetValue(0.0);
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (value == 0.0) return; // ignore button releases
+
+        context->GetPage()->ToggleFolderView();
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class TrackSetCurrentFolder : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char* GetName() override { return "TrackSetCurrentFolder"; }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        context->UpdateColorValue(0.0);
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (value == 0.0) return; // ignore button releases
+
+        if (MediaTrack* track = context->GetTrack())
+            context->GetPage()->SetCurrentFolder(track);
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class SetParentFolderAsCurrent : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char* GetName() override { return "SetParentFolderAsCurrent"; }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        context->UpdateColorValue(0.0);
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (value == 0.0) return; // ignore button releases
+
+        context->GetPage()->SetParentFolderAsCurrent();
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class GlobalAutoModeDisplay : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {

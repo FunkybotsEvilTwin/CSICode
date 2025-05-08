@@ -443,7 +443,7 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
 {
     if (in_tokens.size() < 2)
         return;
-    
+
     string widgetClass;
     
     if (in_tokens.size() > 2)
@@ -774,7 +774,7 @@ void OSC_ControlSurface::ProcessOSCWidget(int &lineNumber, ifstream &surfaceTemp
         LogToConsole(2048, "[ERROR] FAILED to ProcessOSCWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
         return;
     }
-    
+
     vector<vector<string>> tokenLines;
 
     for (string line; getline(surfaceTemplateFile, line) ; )
@@ -1058,6 +1058,9 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("TrackVCALeaderDisplay", make_unique<TrackVCALeaderDisplay>()));
     actions_.insert(make_pair("TrackToggleFolderSpill", make_unique<TrackToggleFolderSpill>()));
     actions_.insert(make_pair("TrackFolderParentDisplay", make_unique<TrackFolderParentDisplay>()));
+    actions_.insert(make_pair("ToggleFolderView", make_unique<ToggleFolderView>()));
+    actions_.insert(make_pair("TrackSetCurrentFolder", make_unique<TrackSetCurrentFolder>()));
+    actions_.insert(make_pair("SetParentFolderAsCurrent", make_unique<SetParentFolderAsCurrent>()));
     actions_.insert(make_pair("TrackSelect", make_unique<TrackSelect>()));
     actions_.insert(make_pair("TrackUniqueSelect", make_unique<TrackUniqueSelect>()));
     actions_.insert(make_pair("TrackRangeSelect", make_unique<TrackRangeSelect>()));
@@ -1402,11 +1405,11 @@ void CSurfIntegrator::Init()
                                     {
                                         LogToConsole(256, "[ERROR] FAILED to Init. Unable to create folder %s\n", fxZoneFolder.c_str());
                                         LogToConsole(2048, "Exception: %s\n", e.what());
-      
+
                                         char tmp[MEDBUF];
                                         snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), fxZoneFolder.c_str());
                                         MessageBox(g_hwnd, tmp, __LOCALIZE("Missing FX Zone Folder","csi_mbox"), MB_OK);
-                                        
+
                                         return;
                                     }
 
@@ -2112,7 +2115,7 @@ void Zone::Activate()
         if (!strcmp(widget->GetName(), "OnZoneActivation"))
             for (auto &actionContext :  GetActionContexts(widget))
                 actionContext->DoAction(1.0);
-        
+
         widget->Configure(GetActionContexts(widget));
     }
 
@@ -2561,7 +2564,7 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
         
         CSIZoneInfo info;
         info.filePath = filePath;
-        
+
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] PreProcessZoneFile: %s\n", GetRelativePath(filePath.c_str()));
         for (string line; getline(file, line) ; )
         {
@@ -2794,7 +2797,7 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 
                 if (hasHoldModifier && context->GetHoldDelay() == 0)
                     context->SetHoldDelay(ActionContext::HOLD_DELAY_INHERIT_VALUE);
-                
+
                 vector<double> range;
                 
                 if (isDecrease)
@@ -3299,22 +3302,92 @@ void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latch
 void TrackNavigationManager::RebuildTracks()
 {
     int oldTracksSize = (int) tracks_.size();
-    
+
     tracks_.clear();
-    
-    for (int i = 1; i <= GetNumTracks(); ++i)
+
+    if (isFolderViewActive_)
     {
-        if (MediaTrack *track = CSurf_TrackFromID(i, followMCP_))
+        parentOfCurrentFolderTrack_ = nullptr;
+        std::vector<MediaTrack*> ancestorStack;
+
+        // Find the parent of the current folder track, and the index of the first track in the folder
+        int trackID = 1;
+        if (currentFolderTrackID_ > 0 && currentFolderTrackID_ < GetNumTracks())
+        {
+            for (; trackID <= GetNumTracks(); trackID++)
+            {
+                MediaTrack* track = CSurf_TrackFromID(trackID, followMCP_);
+                int depthOffset = GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH");
+
+                if (trackID == currentFolderTrackID_)
+                {
+                    if (depthOffset == 1)
+                    {
+                        trackID++; // The next track is the first one in the folder (a folder cannot be empty)
+                    }
+                    else // The current track is not a folder (may happen is tracks were deleted for example)
+                    {
+                        if (!ancestorStack.empty())
+                        {
+                            trackID = GetIdFromTrack(ancestorStack.back()) + 1; // Back to last parent folder, next track is the first one in the folder
+                            ancestorStack.pop_back();
+                        }
+                        else
+                        {
+                            trackID = 1; // Back to the root level
+                        }
+                    }
+                    break;
+                }
+
+                if (depthOffset > 0)
+                    ancestorStack.push_back(track);
+                else if (depthOffset < 0 && !ancestorStack.empty())
+                    ancestorStack.pop_back();
+            }
+        }
+
+        // Set the parent folder ancestor stack
+        if (!ancestorStack.empty())
+            parentOfCurrentFolderTrack_ = ancestorStack.back();
+
+        // List the tracks in the folder
+        int relativeDepth = 0; // Where 0 is the level of the current folder content
+        for (; trackID <= GetNumTracks(); trackID++)
+        {
+            MediaTrack* track = CSurf_TrackFromID(trackID, followMCP_);
+            if (!track)
+                continue;
+
+            if (relativeDepth == 0 && IsTrackVisible(track, followMCP_))
+                tracks_.push_back(track);
+
+            relativeDepth += static_cast<int>(GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH"));
+
+            // Last track of the folder
+            if (relativeDepth < 0)
+                break;
+        }
+    }
+    else
+    {
+        for (int i = 1; i <= GetNumTracks(); ++i)
+        {
+            MediaTrack* track = CSurf_TrackFromID(i, followMCP_);
+            if (!track)
+                continue;
+
             if (IsTrackVisible(track, followMCP_))
                 tracks_.push_back(track);
+        }
     }
-    
+
     if (tracks_.size() < oldTracksSize)
     {
         for (int i = oldTracksSize; i > tracks_.size(); i--)
             page_->ForceClearTrack(i - trackOffset_);
     }
-    
+
     if (tracks_.size() != oldTracksSize)
         page_->ForceUpdateTrackColors();
 }
