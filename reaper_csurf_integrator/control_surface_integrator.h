@@ -2968,33 +2968,40 @@ protected:
     
     void ForceScrollLink()
     {
-        // Make sure selected track is visble on the control surface
+        // Make sure selected track is visible on the control surface
         MediaTrack *selectedTrack = GetSelectedTrack();
         
         if (selectedTrack != NULL)
         {
+            // Is the selected track already visible
             for (auto &trackNavigator : trackNavigators_)
                 if (selectedTrack == trackNavigator->GetTrack())
                     return;
             
-            for (int i = 1; i <= GetNumTracks(); ++i)
+            // Find the selected track in the tracks_ list
+            int trackOffsetInList = 0;
+            bool found = false;
+            for (MediaTrack* track : tracks_)
             {
-                if (selectedTrack == GetTrackFromId(i))
+                if (track == selectedTrack)
                 {
-                    trackOffset_ = i - 1;
+                    found = true;
                     break;
                 }
+                ++trackOffsetInList;
             }
-            
-            trackOffset_ -= targetScrollLinkChannel_;
-            
-            if (trackOffset_ <  0)
-                trackOffset_ =  0;
-            
-            int top = GetNumTracks() - trackNavigators_.size();
-            
-            if (trackOffset_ >  top)
-                trackOffset_ = top;
+
+            if (found)
+            {
+                int trackOffset = currentFolderTrackID_ + trackOffsetInList;
+                int maxOffset = tracks_.size() - trackNavigators_.size();
+                if (maxOffset < 0)
+                    maxOffset = 0;
+                maxOffset += currentFolderTrackID_;
+                if (trackOffset > maxOffset)
+                    trackOffset = maxOffset;
+                trackOffset_ = trackOffset;
+            }
         }
     }
     
