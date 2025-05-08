@@ -3325,16 +3325,18 @@ void TrackNavigationManager::RebuildTracks()
                     {
                         trackID++; // The next track is the first one in the folder (a folder cannot be empty)
                     }
-                    else // The current track is not a folder (may happen is tracks were deleted for example)
+                    else // The currentFolderTrackID_ is not a folder actually
                     {
                         if (!ancestorStack.empty())
                         {
-                            trackID = GetIdFromTrack(ancestorStack.back()) + 1; // Back to last parent folder, next track is the first one in the folder
+                            currentFolderTrackID_ = GetIdFromTrack(ancestorStack.back()); // Back to last parent folder
+                            trackID = currentFolderTrackID_ + 1; // Next track is the first one in the folder
                             ancestorStack.pop_back();
                         }
                         else
                         {
-                            trackID = 1; // Back to the root level
+                            currentFolderTrackID_ = 0; // Back to the root level
+                            trackID = 1;
                         }
                     }
                     break;
