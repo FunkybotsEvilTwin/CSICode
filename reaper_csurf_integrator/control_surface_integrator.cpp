@@ -3317,7 +3317,7 @@ void TrackNavigationManager::RebuildTracks()
             for (; trackID <= GetNumTracks(); trackID++)
             {
                 MediaTrack* track = CSurf_TrackFromID(trackID, followMCP_);
-                int depthOffset = GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH");
+                int depthOffset = static_cast<int>(GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH"));
 
                 if (trackID == currentFolderTrackID_)
                 {
