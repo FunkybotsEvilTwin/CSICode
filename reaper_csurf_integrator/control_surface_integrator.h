@@ -3454,22 +3454,40 @@ public:
         return CSurf_TrackToID(track, followMCP_);
     }
     
-    void SetCurrentFolder(MediaTrack* track)
+    MediaTrack* SetCurrentFolder(MediaTrack* track)
     {
         if (track == nullptr)
             currentFolderTrackID_ = 0;
         else if (GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") != 1)
-            return;
+            return nullptr;
         else
             currentFolderTrackID_ = CSurf_TrackToID(track, followMCP_);
 
         // trackOffset is 0-based, currentFolderTrackID_ starts at 1, the track offset points to the first track after the folder track
         trackOffset_ = currentFolderTrackID_;
+
+        // If CSI follows the TCP or the MPC, then the selection cannot be outside the folder we just enter:
+        // as we were previously outside this folder, the selected track cannot be inside: it needs to be changed.
+        // Select the first track in the folder
+        if (isScrollLinkEnabled_)
+            return GetTrackFromId(currentFolderTrackID_ + 1);
+        else
+            return nullptr;
     }
 
-    void ExitCurrentFolder()
+    MediaTrack* ExitCurrentFolder()
     {
+        MediaTrack* exitedFolderTrack = GetTrackFromId(currentFolderTrackID_);
+
         SetCurrentFolder(parentOfCurrentFolderTrack_); // parentOfCurrentFolderTrack_ will be updated on track list rebuild
+
+        // If CSI follows the TCP or the MPC, then the selection cannot be outside the folder we just enter:
+        // as we were previously in a child folder, the selected track cannot be at this level: it needs to be changed.
+        // Select the folder just exited
+        if (isScrollLinkEnabled_)
+            return exitedFolderTrack;
+        else
+            return nullptr;
     }
 
     bool GetIsVCASpilled(MediaTrack *track)
@@ -3930,8 +3948,8 @@ public:
     Navigator * GetFocusedFXNavigator() { return trackNavigationManager_->GetFocusedFXNavigator(); }
     void ToggleFolderView() { trackNavigationManager_->ToggleFolderView(); }
     bool GetIsFolderViewActive() { return trackNavigationManager_->GetIsFolderViewActive(); }
-    void SetCurrentFolder(MediaTrack* track) { trackNavigationManager_->SetCurrentFolder(track); }
-    void ExitCurrentFolder() { trackNavigationManager_->ExitCurrentFolder(); }
+    MediaTrack* SetCurrentFolder(MediaTrack* track) { return trackNavigationManager_->SetCurrentFolder(track); }
+    MediaTrack* ExitCurrentFolder() { return trackNavigationManager_->ExitCurrentFolder(); }
     void VCAModeActivated() { trackNavigationManager_->VCAModeActivated(); }
     void VCAModeDeactivated() { trackNavigationManager_->VCAModeDeactivated(); }
     void FolderModeActivated() { trackNavigationManager_->FolderModeActivated(); }
