@@ -3258,7 +3258,28 @@ public:
     void SetTrackOffset(int trackOffset)
     {
         if (isScrollSynchEnabled_)
-            trackOffset_ = trackOffset;
+        {
+            // See ForceScrollLink
+            if (isFolderViewActive_)
+            {
+                // Find the track at trackOffset in the tracks_ list
+                MediaTrack* track = GetTrackFromId(trackOffset + 1);
+                auto it = std::find(tracks_.begin(), tracks_.end(), track);
+                if (it == tracks_.end())
+                    return; // not in the current folder, don't scroll the channels
+
+                int trackOffset = currentFolderTrackID_ + static_cast<int>(std::distance(tracks_.begin(), it));
+                int maxOffset = static_cast<int>(tracks_.size() - trackNavigators_.size());
+                if (maxOffset < 0)
+                    maxOffset = 0;
+                maxOffset += currentFolderTrackID_;
+                if (trackOffset > maxOffset)
+                    trackOffset = maxOffset;
+                trackOffset_ = trackOffset;
+            }
+            else
+                trackOffset_ = trackOffset;
+        }
     }
     
     void AdjustTrackBank(int amount)
