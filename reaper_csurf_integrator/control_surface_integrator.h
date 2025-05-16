@@ -3004,9 +3004,10 @@ protected:
         
         if (selectedTrack != NULL)
         {
-            // Is the selected track already visible
-            // TODO: there is a bug here: if you move a track in the TCP, the track navigators are not updated yet when arriving here:
-            // the scroll doesn't work because the selected track is still in the list and we return just here below
+            if (isFolderViewActive_)
+                RebuildTracks(); // Useful if the selected track was just moved out of the curent folder
+
+            // Is the selected track already visible?
             for (auto &trackNavigator : trackNavigators_)
                 if (selectedTrack == trackNavigator->GetTrack())
                     return;
@@ -3023,7 +3024,7 @@ protected:
                 // The selected track is not in the current track list because currentFolderTrackID_ is not its parent:
                 MediaTrack* parentTrack = GetParentTrack(selectedTrack);
                 currentFolderTrackID_ = parentTrack ? GetIdFromTrack(parentTrack) : 0;
-                RebuildTracks();
+                RebuildTracks(); // currentFolderTrackID_ changed
 
                 // Find the selected track in the tracks_ list
                 auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
