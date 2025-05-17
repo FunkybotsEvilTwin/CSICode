@@ -3492,6 +3492,11 @@ public:
     virtual void RequestUpdate(ActionContext* context) override
     {
         context->UpdateColorValue(0.0);
+
+        if (context->GetPage()->IsAtRootFolderLevel())
+            context->UpdateWidgetValue(0.0);
+        else
+            context->UpdateWidgetValue(1.0);
     }
 
     virtual void Do(ActionContext* context, double value) override
