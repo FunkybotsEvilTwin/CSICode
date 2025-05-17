@@ -2969,7 +2969,7 @@ protected:
     bool isScrollSynchEnabled_;
     int currentTrackVCAFolderMode_ = 0;
     int targetScrollLinkChannel_ = 0;
-    int trackOffset_ = 0;
+    int trackOffset_ = 0; // Offset in tracks_ of the first channel on the surface
     int vcaTrackOffset_ = 0;
     int folderTrackOffset_ = 0;
     int selectedTracksOffset_ = 0;
@@ -2997,6 +2997,24 @@ protected:
     unique_ptr<Navigator> selectedTrackNavigator_;
     unique_ptr<Navigator> focusedFXNavigator_;
     
+    void setTrackOffset(int trackOffset)
+    {
+        if (trackOffset <= 0)
+        {
+            trackOffset_ = 0;
+            return;
+        }
+
+        int maxOffset = static_cast<int>(tracks_.size() - trackNavigators_.size());
+        if (maxOffset < 0)
+            maxOffset = 0;
+
+        if (trackOffset > maxOffset)
+            trackOffset_ = maxOffset;
+        else
+            trackOffset_ = trackOffset;
+    }
+
     void ForceScrollLink()
     {
         // Make sure selected track is visible on the control surface
@@ -3004,44 +3022,26 @@ protected:
         
         if (selectedTrack != NULL)
         {
-            if (isFolderViewActive_)
-                RebuildTracks(); // Useful if the selected track was just moved out of the curent folder
-
-            // Is the selected track already visible?
+            // Is the selected track already visible on the surface?
             for (auto &trackNavigator : trackNavigators_)
                 if (selectedTrack == trackNavigator->GetTrack())
                     return;
             
-            int trackOffsetInList = -1; // -1 means not found
+            // Check if the selected track is in the current folder
+            MediaTrack* parentTrack = GetParentTrack(selectedTrack);
+            int parentTrackId = parentTrack ? GetIdFromTrack(parentTrack) : 0;
+            if (currentFolderTrackID_ = parentTrackId)
+            {
+                // If not, chenge the current folder to the selected track's parent
+                currentFolderTrackID_ = parentTrack ? GetIdFromTrack(parentTrack) : 0;
+                RebuildTracks();
+            }
 
             // Find the selected track in the tracks_ list
             auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
             if (it != tracks_.end())
-                trackOffsetInList = static_cast<int>(std::distance(tracks_.begin(), it));
-
-            if (trackOffsetInList < 0)
             {
-                // The selected track is not in the current track list because currentFolderTrackID_ is not its parent:
-                MediaTrack* parentTrack = GetParentTrack(selectedTrack);
-                currentFolderTrackID_ = parentTrack ? GetIdFromTrack(parentTrack) : 0;
-                RebuildTracks(); // currentFolderTrackID_ changed
-
-                // Find the selected track in the tracks_ list
-                auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
-                if (it != tracks_.end())
-                    trackOffsetInList = static_cast<int>(std::distance(tracks_.begin(), it));
-            }
-
-            if (trackOffsetInList >= 0)
-            {
-                int trackOffset = currentFolderTrackID_ + trackOffsetInList;
-                int maxOffset = static_cast<int>(tracks_.size() - trackNavigators_.size());
-                if (maxOffset < 0)
-                    maxOffset = 0;
-                maxOffset += currentFolderTrackID_;
-                if (trackOffset > maxOffset)
-                    trackOffset = maxOffset;
-                trackOffset_ = trackOffset;
+                setTrackOffset(static_cast<int>(std::distance(tracks_.begin(), it)));
             }
         }
     }
@@ -3092,8 +3092,9 @@ public:
         }
         else
         {
+            // currentFolderTrackID_ is equal to the absolute offset of the first track in tracks_ before toggling
+            trackOffset_ += currentFolderTrackID_;
             // When in flat mode, currentFolderTrackID_ must be zero
-            // But trackOffset_ is kept
             currentFolderTrackID_ = 0;
         }
     }
@@ -3259,7 +3260,6 @@ public:
     {
         if (isScrollSynchEnabled_)
         {
-            // See ForceScrollLink
             if (isFolderViewActive_)
             {
                 // Find the track at trackOffset in the tracks_ list
@@ -3268,17 +3268,10 @@ public:
                 if (it == tracks_.end())
                     return; // not in the current folder, don't scroll the channels
 
-                int trackOffset = currentFolderTrackID_ + static_cast<int>(std::distance(tracks_.begin(), it));
-                int maxOffset = static_cast<int>(tracks_.size() - trackNavigators_.size());
-                if (maxOffset < 0)
-                    maxOffset = 0;
-                maxOffset += currentFolderTrackID_;
-                if (trackOffset > maxOffset)
-                    trackOffset = maxOffset;
-                trackOffset_ = trackOffset;
+                trackOffset = static_cast<int>(std::distance(tracks_.begin(), it));
             }
-            else
-                trackOffset_ = trackOffset;
+
+            setTrackOffset(trackOffset);
         }
     }
     
@@ -3287,28 +3280,11 @@ public:
         if (currentTrackVCAFolderMode_ != 0)
             return;
 
-        int numTracks = (int) tracks_.size();
-        
-        if (numTracks <= trackNavigators_.size())
-            return;
-       
-        trackOffset_ += amount;
-        
-        if (trackOffset_ < currentFolderTrackID_)
-            trackOffset_ = currentFolderTrackID_;
-        
-        int top = numTracks - (int) trackNavigators_.size();
-        
-        if (trackOffset_ > currentFolderTrackID_ + top)
-            trackOffset_ = currentFolderTrackID_ + top;
+        setTrackOffset(trackOffset_ + amount);
         
         if (isScrollSynchEnabled_)
         {
-            int offset = trackOffset_;
-            
-            offset++;
-            
-            if (MediaTrack *leftmostTrack = DAW::GetTrack(offset))
+            if (MediaTrack *leftmostTrack = DAW::GetTrack(currentFolderTrackID_ + 1 + trackOffset_))
                 SetMixerScroll(leftmostTrack);
         }
     }
@@ -3397,15 +3373,7 @@ public:
     {
         if (currentTrackVCAFolderMode_ == 0)
         {
-            if (trackOffset_ < currentFolderTrackID_)
-            {
-                // Just in case, this should never happen
-                currentFolderTrackID_ = 0;
-            }
-
-            // If currentFolderTrackID_ is 0, we are in the root folder (or in flat mode)
-            // If not, we are in a folder: the first displayable track is trackOffset_ + 1, but trackOffset_ is 0-based and currentFolderTrackID_ is 1-based
-            channelNumber += trackOffset_ - currentFolderTrackID_;
+            channelNumber += trackOffset_;
 
             if (channelNumber < GetNumTracks() && channelNumber < tracks_.size() && DAW::ValidateTrackPtr(tracks_[channelNumber]))
                 return tracks_[channelNumber];
@@ -3485,8 +3453,7 @@ public:
         else
             currentFolderTrackID_ = CSurf_TrackToID(track, followMCP_);
 
-        // trackOffset is 0-based, currentFolderTrackID_ starts at 1, the track offset points to the first track after the folder track
-        trackOffset_ = currentFolderTrackID_;
+        trackOffset_ = 0;
 
         // If CSI follows the TCP or the MPC, then the selection cannot be outside the folder we just enter:
         // as we were previously outside this folder, the selected track cannot be inside: it needs to be changed.
@@ -3630,6 +3597,9 @@ public:
     
     void OnTrackListChange()
     {
+        RebuildTracks(); 
+        AdjustTrackBank(0); // make sure the track offset is correct
+
         if (isScrollLinkEnabled_)
             ForceScrollLink();
     }
