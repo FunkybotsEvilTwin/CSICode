@@ -362,7 +362,7 @@ public:
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1],  color.b);
 
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
-            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+            LogToConsole("[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
 };
@@ -599,7 +599,7 @@ public:
 
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str()))
+        if (!IsSameString(inputText, lastStringSent_.c_str()))
             ForceValue(properties, inputText);
     }
     
@@ -795,13 +795,13 @@ public:
         const char *ringstyle = properties.get_prop(PropertyType_RingStyle);
         if (ringstyle)
         {
-            if (!strcmp(ringstyle, "Dot"))
+            if (IsSameString(ringstyle, "Dot"))
                 displayMode = 0;
-            else if (!strcmp(ringstyle, "BoostCut"))
+            else if (IsSameString(ringstyle, "BoostCut"))
                 displayMode = 1;
-            else if (!strcmp(ringstyle, "Fill"))
+            else if (IsSameString(ringstyle, "Fill"))
                 displayMode = 2;
-            else if (!strcmp(ringstyle, "Spread"))
+            else if (IsSameString(ringstyle, "Spread"))
                 displayMode = 3;
         }
 
@@ -968,7 +968,7 @@ public:
         
         SendMidiSysExMessage(&midiSysExData.evt);
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
-            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+            LogToConsole("[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
 };
@@ -1004,7 +1004,7 @@ public:
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1], color.g / 2);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1], color.b / 2);
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
-            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+            LogToConsole("[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
 };
@@ -1045,7 +1045,7 @@ public:
         SendMidiMessage(0x92, midiFeedbackMessage1_.midi_message[1], color.g / 2);
         SendMidiMessage(0x93, midiFeedbackMessage1_.midi_message[1], color.b / 2);
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
-            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+            LogToConsole("[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
     
@@ -1063,16 +1063,11 @@ class Fader14Bit_Midi_FeedbackProcessor : public Midi_FeedbackProcessor
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 private:
-    bool shouldSetToZero_;
-    DWORD timeZeroValueReceived_;
-    
+    double lastValue_ = 0.0;
+
 public:
     virtual ~Fader14Bit_Midi_FeedbackProcessor() {}
-    Fader14Bit_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1) : Midi_FeedbackProcessor(csi, surface, widget, feedback1)
-    {
-        shouldSetToZero_ = false;
-        timeZeroValueReceived_ = 0;
-    }
+    Fader14Bit_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1) : Midi_FeedbackProcessor(csi, surface, widget, feedback1) {}
     
     virtual const char *GetName() override { return "Fader14Bit_Midi_FeedbackProcessor"; }
 
@@ -1081,35 +1076,14 @@ public:
         const PropertyList properties;
         ForceValue(properties, 0.0);
     }
-    
-    virtual void RunDeferredActions() override
-    {
-        if (shouldSetToZero_ && (GetTickCount() - timeZeroValueReceived_) > 250)
-        {
-            ForceMidiMessage(midiFeedbackMessage1_.midi_message[0], 0x00, 0x00);
-            shouldSetToZero_ = false;
-        }
-    }
 
     virtual void SetValue(const PropertyList &properties, double value) override
     {
-        if (value == 0.0)
-        {
-            shouldSetToZero_ = true;
-            timeZeroValueReceived_ = GetTickCount();
-            return;
-        }
-        else
-            shouldSetToZero_ = false;
-    
+        if (value == lastValue_) return;
+        lastValue_ = value;
+
         int volInt = int(value  *16383.0);
         SendMidiMessage(midiFeedbackMessage1_.midi_message[0], volInt&0x7f, (volInt>>7)&0x7f);
-    }
-    
-    virtual void ForceValue(const PropertyList &properties, double value) override
-    {
-        int volInt = int(value  *16383.0);
-        ForceMidiMessage(midiFeedbackMessage1_.midi_message[0], volInt&0x7f, (volInt>>7)&0x7f);
     }
 };
 
@@ -1118,16 +1092,11 @@ class FaderportClassicFader14Bit_Midi_FeedbackProcessor : public Midi_FeedbackPr
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 private:
-    bool shouldSetToZero_;
-    DWORD timeZeroValueReceived_;
-    
+    double lastValue_ = 0.0;
+
 public:
     virtual ~FaderportClassicFader14Bit_Midi_FeedbackProcessor() {}
-    FaderportClassicFader14Bit_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1, MIDI_event_ex_t feedback2) : Midi_FeedbackProcessor(csi, surface, widget, feedback1, feedback2)
-    {
-        shouldSetToZero_ = false;
-        timeZeroValueReceived_ = 0;
-    }
+    FaderportClassicFader14Bit_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, MIDI_event_ex_t feedback1, MIDI_event_ex_t feedback2) : Midi_FeedbackProcessor(csi, surface, widget, feedback1, feedback2) {}
     
     virtual const char *GetName() override { return "FaderportClassicFader14Bit_Midi_FeedbackProcessor"; }
 
@@ -1136,29 +1105,11 @@ public:
         const PropertyList properties;
         ForceValue(properties, 0.0);
     }
-    
-    virtual void RunDeferredActions() override
-    {
-        if (shouldSetToZero_ && (GetTickCount() - timeZeroValueReceived_) > 250)
-        {
-            ForceMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], 0x00);
-            ForceMidiMessage(midiFeedbackMessage2_.midi_message[0], midiFeedbackMessage2_.midi_message[1], 0x00);
-
-            shouldSetToZero_ = false;
-        }
-    }
 
     virtual void SetValue(const PropertyList &properties, double value) override
     {
-        if (value == 0.0)
-        {
-            shouldSetToZero_ = true;
-            timeZeroValueReceived_ = GetTickCount();
-            return;
-        }
-        else
-            shouldSetToZero_ = false;
-    
+        if (value == lastValue_) return;
+        lastValue_ = value;
         int volInt = int(value  *1024.0);
         
         if (midiFeedbackMessage1_.midi_message[2] != ((volInt>>7)&0x7f) || midiFeedbackMessage2_.midi_message[2] != (volInt&0x7f))
@@ -1169,14 +1120,6 @@ public:
             SendMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], midiFeedbackMessage1_.midi_message[2]);
             SendMidiMessage(midiFeedbackMessage2_.midi_message[0], midiFeedbackMessage2_.midi_message[1], midiFeedbackMessage2_.midi_message[2]);
         }
-    }
-    
-    virtual void ForceValue(const PropertyList &properties, double value) override
-    {
-        int volInt = int(value  *16383.0);
-        
-        ForceMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], (volInt>>7)&0x7f);
-        ForceMidiMessage(midiFeedbackMessage2_.midi_message[0], midiFeedbackMessage2_.midi_message[1], volInt&0x7f);
     }
 };
 
@@ -1199,11 +1142,6 @@ public:
     virtual void SetValue(const PropertyList &properties, double value) override
     {
         SendMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], int(value  *127.0));
-    }
-    
-    virtual void ForceValue(const PropertyList &properties, double value) override
-    {
-        ForceMidiMessage(midiFeedbackMessage1_.midi_message[0], midiFeedbackMessage1_.midi_message[1], int(value  *127.0));
     }
 };
 
@@ -1242,13 +1180,13 @@ public:
         const char *ringstyle = properties.get_prop(PropertyType_RingStyle);
         if (ringstyle)
         {
-            if (!strcmp(ringstyle, "Dot"))
+            if (IsSameString(ringstyle, "Dot"))
                 displayMode = 0;
-            else if (!strcmp(ringstyle, "BoostCut"))
+            else if (IsSameString(ringstyle, "BoostCut"))
                 displayMode = 1;
-            else if (!strcmp(ringstyle, "Fill"))
+            else if (IsSameString(ringstyle, "Fill"))
                 displayMode = 2;
-            else if (!strcmp(ringstyle, "Spread"))
+            else if (IsSameString(ringstyle, "Spread"))
                 displayMode = 3;
         }
 
@@ -1305,9 +1243,9 @@ public:
         const char *ringstyle = properties.get_prop(PropertyType_RingStyle);
         if (ringstyle)
         {
-            if (!strcmp(ringstyle, "Fill"))
+            if (IsSameString(ringstyle, "Fill"))
                 displayMode_ = 1;
-            else if (!strcmp(ringstyle, "Dot"))
+            else if (IsSameString(ringstyle, "Dot"))
                 displayMode_ = 2;
         }
 
@@ -1621,13 +1559,13 @@ private:
         const char *barstyle = properties.get_prop(PropertyType_BarStyle);
         if (barstyle)
         {
-            if (!strcmp(barstyle, "Normal"))
+            if (IsSameString(barstyle, "Normal"))
                 return 0;
-            else if (!strcmp(barstyle, "BiPolar"))
+            else if (IsSameString(barstyle, "BiPolar"))
                 return 1;
-            else if (!strcmp(barstyle, "Fill"))
+            else if (IsSameString(barstyle, "Fill"))
                 return 2;
-            else if (!strcmp(barstyle, "Spread"))
+            else if (IsSameString(barstyle, "Spread"))
                 return 3;
         }
 
@@ -1701,7 +1639,7 @@ public:
 
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+        if (!IsSameString(inputText, lastStringSent_.c_str())) // changes since last send
             ForceValue(properties, inputText);
     }
     
@@ -1712,7 +1650,7 @@ public:
         char tmp[MEDBUF];
         const char *text = GetWidget()->GetSurface()->GetRestrictedLengthText(inputText, tmp, sizeof(tmp));
 
-        if (!strcmp(text,"-150.00")) text="";
+        if (IsSameString(text,"-150.00")) text="";
 
         struct
         {
@@ -1769,7 +1707,7 @@ public:
 
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+        if (!IsSameString(inputText, lastStringSent_.c_str())) // changes since last send
             ForceValue(properties, inputText);
     }
     
@@ -1780,7 +1718,7 @@ public:
         char tmp[MEDBUF];
         const char *text = GetWidget()->GetSurface()->GetRestrictedLengthText(inputText, tmp, sizeof(tmp));
 
-        if (!strcmp(text,"-150.00")) text="";
+        if (IsSameString(text,"-150.00")) text="";
 
         struct
         {
@@ -1835,7 +1773,7 @@ public:
 
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+        if (!IsSameString(inputText, lastStringSent_.c_str())) // changes since last send
             ForceValue(properties, inputText);
     }
     
@@ -1846,7 +1784,7 @@ public:
         char tmp[MEDBUF];
         const char *text = GetWidget()->GetSurface()->GetRestrictedLengthText(inputText, tmp, sizeof(tmp));
 
-        if (!strcmp(text,"-150.00")) text = "";
+        if (IsSameString(text,"-150.00")) text = "";
 
         struct
         {
@@ -1908,14 +1846,14 @@ private:
 
     static XTouchColor colorFromString(const char *str)
     {
-        if (!strcmp(str, "Black"))   return COLOR_OFF;
-        if (!strcmp(str, "Red"))     return COLOR_RED;
-        if (!strcmp(str, "Green"))   return COLOR_GREEN;
-        if (!strcmp(str, "Yellow"))  return COLOR_YELLOW;
-        if (!strcmp(str, "Blue"))    return COLOR_BLUE;
-        if (!strcmp(str, "Magenta")) return COLOR_MAGENTA;
-        if (!strcmp(str, "Cyan"))    return COLOR_CYAN;
-        if (!strcmp(str, "White"))   return COLOR_WHITE;
+        if (IsSameString(str, "Black"))   return COLOR_OFF;
+        if (IsSameString(str, "Red"))     return COLOR_RED;
+        if (IsSameString(str, "Green"))   return COLOR_GREEN;
+        if (IsSameString(str, "Yellow"))  return COLOR_YELLOW;
+        if (IsSameString(str, "Blue"))    return COLOR_BLUE;
+        if (IsSameString(str, "Magenta")) return COLOR_MAGENTA;
+        if (IsSameString(str, "Cyan"))    return COLOR_CYAN;
+        if (IsSameString(str, "White"))   return COLOR_WHITE;
         return COLOR_INVALID;
     }
 
@@ -1927,11 +1865,9 @@ private:
     {
         // Doing a RGB to HSV conversion since HSV is better for light
         // Converting RGB to floats between 0 and 1.0 (percentage)
-
         float rf = (float) r / 255.0f;
         float gf = (float) g / 255.0f;
         float bf = (float) b / 255.0f;
-
 
         // Hue will be between 0 and 360 to represent the color wheel.
         // Saturation and Value are a percentage (between 0 and 1.0)
@@ -2050,7 +1986,7 @@ public:
     
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+        if (!IsSameString(inputText, lastStringSent_.c_str())) // changes since last send
             ForceValue(properties, inputText);
     }
     
@@ -2061,7 +1997,7 @@ public:
         char tmp[MEDBUF];
         const char *text = GetWidget()->GetSurface()->GetRestrictedLengthText(inputText, tmp, sizeof(tmp));
 
-        if (!strcmp(text, "-150.00")) text = "";
+        if (IsSameString(text, "-150.00")) text = "";
 
         struct
         {
@@ -2158,9 +2094,9 @@ private:
         const char *textalign = properties.get_prop(PropertyType_TextAlign);
         if (textalign)
         {
-            if (!strcmp(textalign, "Left"))
+            if (IsSameString(textalign, "Left"))
                 return 1;
-            else if (!strcmp(textalign, "Right"))
+            else if (IsSameString(textalign, "Right"))
                 return 2;
         }
 
@@ -2170,7 +2106,7 @@ private:
     int GetTextInvert(const PropertyList &properties)
     {
         const char *textinvert = properties.get_prop(PropertyType_TextInvert);
-        if (textinvert && !strcmp(textinvert, "Yes"))
+        if (textinvert && IsSameString(textinvert, "Yes"))
             return 4;
 
         return 0;
@@ -2193,7 +2129,7 @@ public:
     
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+        if (!IsSameString(inputText, lastStringSent_.c_str())) // changes since last send
             ForceValue(properties, inputText);
     }
     
@@ -2351,7 +2287,7 @@ public:
     
     virtual void SetValue(const PropertyList &properties, const char * const &inputText) override
     {
-        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+        if (!IsSameString(inputText, lastStringSent_.c_str())) // changes since last send
             ForceValue(properties, inputText);
     }
     
@@ -2818,6 +2754,7 @@ public:
     // Commenting out the code so that LED is not forced off on load.
     virtual void ForceClear() override
     {
+        if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole("[NOTICE] # ForceClear do not force LED off\n");
         // rgba_color color;
         // ForceColorValue(color);
     }
@@ -2841,6 +2778,7 @@ public:
             // Commenting this out prevents turning off the LED.
             if (colorInt == 0)
             {
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole("[NOTICE] ForceColorValue ignores color=0, do not force LED off\n");
                 // SendMidiMessage(midiFeedbackMessage1_.midi_message[0] + 1, midiFeedbackMessage1_.midi_message[1], 17); // turn off led
             }
             else
@@ -2850,7 +2788,7 @@ public:
             }
         }
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) {
-            LogToConsole(256, "[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
+            LogToConsole("[DEBUG] [%s] ForceColorValue %d %d %d\n", widget_->GetName(), color.r, color.g, color.b);
         }
     }
 };

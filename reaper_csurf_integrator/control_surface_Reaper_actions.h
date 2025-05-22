@@ -10,45 +10,11 @@
 #include "control_surface_action_contexts.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// class FXParam : public FXAction
-//////////////////////////////////////////////////////////////////////////////////////////////////////
 class FXParam : public FXAction
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char* GetName() override { return "FXParam"; }
-
-    virtual void Do(ActionContext* context, double value) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-            TrackFX_SetParamNormalized(track, context->GetSlotIndex(), context->GetParamIndex(), value);
-#else
-            TrackFX_SetParam(track, context->GetSlotIndex(), context->GetParamIndex(), value);
-#endif
-    }
-
-    virtual void Touch(ActionContext* context, double value) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-            if (value == 0)
-                TrackFX_EndParamEdit(track, context->GetSlotIndex(), context->GetParamIndex());
-            else
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-                TrackFX_SetParamNormalized(track, context->GetSlotIndex(), context->GetParamIndex(),
-                    TrackFX_GetParamNormalized(track, context->GetSlotIndex(), context->GetParamIndex()));
-#else
-        {
-            double min, max;
-            TrackFX_SetParam(track,
-                context->GetSlotIndex(),
-                context->GetParamIndex(),
-                TrackFX_GetParam(track,
-                    context->GetSlotIndex(),
-                    context->GetParamIndex(),
-                    &min, &max));
-        }
-#endif
-    }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,153 +24,6 @@ class JSFXParam : public FXAction
 {
 public:
     virtual const char* GetName() override { return "JSFXParam"; }
-
-    virtual double GetCurrentNormalizedValue(ActionContext* context) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-        {
-#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
-            // use host's normalized getter
-            return TrackFX_GetParamNormalized(
-                track,
-                context->GetSlotIndex(),
-                context->GetParamIndex()
-            );
-#else
-            // fallback: manual raw->normalized
-            double raw = 0.0, min = 0.0, max = 0.0;
-            raw = TrackFX_GetParam(
-                track,
-                context->GetSlotIndex(),
-                context->GetParamIndex(),
-                &min,
-                &max
-            );
-            double range = max - min;
-            if (range <= 0.0) return 0.0;
-            if (min < 0.0) raw += fabs(min);
-            return raw / range;
-#endif
-        }
-        return 0.0;
-    }
-
-    virtual void RequestUpdate(ActionContext* context) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-        {
-            // update main widget
-            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
-
-            // update stepped display if needed
-            if (context->GetNumberOfSteppedValues() > 0)
-            {
-#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
-                // normalized getter
-                context->UpdateJSFXWidgetSteppedValue(
-                    TrackFX_GetParamNormalized(
-                        track,
-                        context->GetSlotIndex(),
-                        context->GetParamIndex()
-                    )
-                );
-#else
-                // raw getter + remap to 0-1
-                double raw = 0.0, min = 0.0, max = 0.0;
-                raw = TrackFX_GetParam(
-                    track,
-                    context->GetSlotIndex(),
-                    context->GetParamIndex(),
-                    &min,
-                    &max
-                );
-                double range = max - min;
-                double norm = (range > 0.0) ? ((raw - min) / range) : 0.0;
-                context->UpdateJSFXWidgetSteppedValue(norm);
-#endif
-            }
-        }
-        else
-        {
-            context->ClearWidget();
-        }
-    }
-
-    virtual void Do(ActionContext* context, double value) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-        {
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-            // normalized setter
-            TrackFX_SetParamNormalized(
-                track,
-                context->GetSlotIndex(),
-                context->GetParamIndex(),
-                value
-            );
-#else
-            // fallback: raw setter with manual range mapping
-            double min = 0.0, max = 0.0;
-            TrackFX_GetParam(
-                track,
-                context->GetSlotIndex(),
-                context->GetParamIndex(),
-                &min,
-                &max
-            );
-            double raw = min + value * (max - min);
-            TrackFX_SetParam(
-                track,
-                context->GetSlotIndex(),
-                context->GetParamIndex(),
-                raw
-            );
-#endif
-        }
-    }
-
-    virtual void Touch(ActionContext* context, double value) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-        {
-            if (value == 0.0)
-            {
-                TrackFX_EndParamEdit(
-                    track,
-                    context->GetSlotIndex(),
-                    context->GetParamIndex()
-                );
-            }
-            else
-            {
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-                // re-apply current normalized value
-                TrackFX_SetParamNormalized(
-                    track,
-                    context->GetSlotIndex(),
-                    context->GetParamIndex(),
-                    GetCurrentNormalizedValue(context)
-                );
-#else
-                // fallback: re-apply raw
-                double min = 0.0, max = 0.0;
-                double raw = TrackFX_GetParam(
-                    track,
-                    context->GetSlotIndex(),
-                    context->GetParamIndex(),
-                    &min,
-                    &max
-                );
-                TrackFX_SetParam(
-                    track,
-                    context->GetSlotIndex(),
-                    context->GetParamIndex(),
-                    raw
-                );
-#endif
-            }
-        }
-    }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,52 +34,22 @@ class TCPFXParam : public FXAction
 public:
     virtual const char* GetName() override { return "TCPFXParam"; }
 
-    virtual double GetCurrentNormalizedValue(ActionContext* context) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-        {
-            int index = context->GetIntParam();
-            if (CountTCPFXParms(NULL, track) > index)
-            {
-                int fxIndex = 0, paramIndex = 0;
-                if (GetTCPFXParm(NULL, track, index, &fxIndex, &paramIndex))
-                {
-#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
-                    return TrackFX_GetParamNormalized(track, fxIndex, paramIndex);
-#else
-                    double raw = TrackFX_GetParam(track, fxIndex, paramIndex, &min, &max);
-                    double range = max - min;
-                    return (range > 0.0) ? ((raw - min) / range) : 0.0;
-#endif
-                }
-            }
-        }
-        return 0.0;
-    }
+    virtual bool CheckCurrentContext(ActionContext *context) {
+        MediaTrack* currentTrack = context->GetTrack();
 
-    virtual void Do(ActionContext* context, double value) override
-    {
-        if (MediaTrack* track = context->GetTrack())
-        {
-            int index = context->GetIntParam();
-            if (CountTCPFXParms(NULL, track) > index)
-            {
-                int fxIndex = 0, paramIndex = 0;
-                if (GetTCPFXParm(NULL, track, index, &fxIndex, &paramIndex))
-                {
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-                    TrackFX_SetParamNormalized(track, fxIndex, paramIndex, value);
-#else
-                    TrackFX_SetParam(track, fxIndex, paramIndex, value);
-#endif
-                }
-            }
-        }
-    }
+        if (!currentTrack)
+            ClearCurrentContext();
 
-    virtual void Touch(ActionContext* context, double value) override
-    {
-        // no-op
+        if (track_ != currentTrack)
+            track_ = currentTrack;
+
+        int index = context->GetIntParam();
+        if (CountTCPFXParms(NULL, track_) <= index)
+            return ClearCurrentContext();
+        if (!GetTCPFXParm(NULL, track_, index, &fxSlotNum_, &fxParamNum_))
+            return ClearCurrentContext();
+
+        return true;
     }
 };
 
@@ -269,85 +58,55 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class LastTouchedFXParam : public FXAction
 {
+private:
+    MediaTrack* track_;
+    int trackNum_ = -1, fxSlotNum_ = -1, fxParamNum_ = -1;
+    double lastValue_ = 0.0;
 public:
     virtual const char* GetName() override { return "LastTouchedFXParam"; }
 
+    bool CheckLastTouchedFX() {
+        if (GetLastTouchedFX(&trackNum_, &fxSlotNum_, &fxParamNum_)) {
+            track_ = DAW::GetTrack(trackNum_);
+            if (track_)
+                return true;
+        }
+        track_ = nullptr;
+        trackNum_ = -1;
+        fxSlotNum_ = -1;
+        fxParamNum_ = -1;
+        return false;
+    }
+
     virtual double GetCurrentNormalizedValue(ActionContext* context) override
     {
-        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
-        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return 0.0;
-        MediaTrack* track = DAW::GetTrack(trackNum);
-        if (!track) return 0.0;
-#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
-        return TrackFX_GetParamNormalized(track, fxSlotNum, fxParamNum);
-#else
-        double raw = 0.0, min = 0.0, max = 0.0;
-        raw = TrackFX_GetParam(track, fxSlotNum, fxParamNum, &min, &max);
-        double range = max - min;
-        return (range > 0.0) ? ((raw - min) / range) : 0.0;
-#endif
+        if (!CheckLastTouchedFX()) return 0.0;
+        return DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
     }
 
     virtual void RequestUpdate(ActionContext* context) override
     {
-        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
-        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum))
-        {
-            context->ClearWidget();
-            return;
-        }
-        MediaTrack* track = DAW::GetTrack(trackNum);
-        if (!track) { context->ClearWidget(); return; }
-#if defined(REAPERAPI_WANT_TrackFX_GetParamNormalized)
-        context->UpdateWidgetValue(
-            TrackFX_GetParamNormalized(track, fxSlotNum, fxParamNum)
-        );
-#else
-        double raw = 0.0, min = 0.0, max = 0.0;
-        raw = TrackFX_GetParam(track, fxSlotNum, fxParamNum, &min, &max);
-        double range = max - min;
-        double norm = (range > 0.0) ? ((raw - min) / range) : 0.0;
-        context->UpdateWidgetValue(norm);
-#endif
+        if (!CheckLastTouchedFX())
+            return context->ClearWidget();
+        double value = DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
+        if (DAW::CompareFaderValues(lastValue_, value)) return;
+        lastValue_ = value;
+        context->UpdateWidgetValue(value);
     }
 
     virtual void Do(ActionContext* context, double value) override
     {
-        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
-        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return;
-        MediaTrack* track = DAW::GetTrack(trackNum);
-        if (!track) return;
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-        TrackFX_SetParamNormalized(track, fxSlotNum, fxParamNum, value);
-#else
-        TrackFX_SetParam(track, fxSlotNum, fxParamNum, value);
-#endif
+        if (DAW::CompareFaderValues(lastValue_, value)) return;
+        lastValue_ = value;
+        if (!CheckLastTouchedFX()) return;
+        DAW::SetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_, value);
     }
 
     virtual void Touch(ActionContext* context, double value) override
     {
-        int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
-        if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return;
-        MediaTrack* track = DAW::GetTrack(trackNum);
-        if (!track) return;
-
-        if (value == 0.0)
-            TrackFX_EndParamEdit(track, fxSlotNum, fxParamNum);
-        else
-        {
-#if defined(REAPERAPI_WANT_TrackFX_SetParamNormalized)
-            TrackFX_SetParamNormalized(
-                track, fxSlotNum, fxParamNum,
-                GetCurrentNormalizedValue(context)
-            );
-#else
-            double rawMin = 0.0, rawMax = 0.0;
-            TrackFX_GetParam(track, fxSlotNum, fxParamNum, &rawMin, &rawMax);
-            double norm = GetCurrentNormalizedValue(context);
-            double raw = rawMin + norm * (rawMax - rawMin);
-            TrackFX_SetParam(track, fxSlotNum, fxParamNum, raw);
-#endif
-        }
+        if (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+        if (!CheckLastTouchedFX()) return;
+        TrackFX_EndParamEdit(track_, fxSlotNum_, fxParamNum_);
     }
 };
 
@@ -389,7 +148,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXBypassDisplay : public FXAction
+class FXBypassDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -452,7 +211,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXOfflineDisplay : public FXAction
+class FXOfflineDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -478,48 +237,15 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackVolume : public Action
+class TrackVolume : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackVolume"; }
-    
-    virtual double GetCurrentNormalizedValue(ActionContext *context) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-        {
-            double vol, pan = 0.0;
-            GetTrackUIVolPan(track, &vol, &pan);
-            return volToNormalized(vol);
-        }
-        else
-            return 0.0;
-    }
-
-    virtual void RequestUpdate(ActionContext *context) override
-    {
-        if (context->GetTrack())
-            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
-        else
-            context->ClearWidget();
-    }
-    
-    virtual void Do(ActionContext *context, double value) override
-    {
-        if (MediaTrack *track = context->GetTrack())
-            CSurf_SetSurfaceVolume(track, CSurf_OnVolumeChange(track, normalizedToVol(value), false), NULL);
-    }
-    
-    virtual void Touch(ActionContext *context, double value) override
-    {
-        context->GetZone()->GetNavigator()->SetIsVolumeTouched(value != 0);
-        if (MediaTrack *track = context->GetTrack())
-            CSurf_SetSurfaceVolume(track, CSurf_OnVolumeChange(track, normalizedToVol(GetCurrentNormalizedValue(context)), false), NULL);
-    }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class SoftTakeover7BitTrackVolume : public Action
+class SoftTakeover7BitTrackVolume : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -545,7 +271,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class SoftTakeover14BitTrackVolume : public Action
+class SoftTakeover14BitTrackVolume : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -571,7 +297,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackVolumeDB : public Action
+class TrackVolumeDB : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -612,7 +338,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPan : public Action
+class TrackPan : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -662,7 +388,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanPercent : public Action
+class TrackPanPercent : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -706,7 +432,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanWidth : public Action
+class TrackPanWidth : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -748,7 +474,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanWidthPercent : public Action
+class TrackPanWidthPercent : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -784,7 +510,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanL : public Action
+class TrackPanL : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -828,7 +554,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanLPercent : public Action
+class TrackPanLPercent : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -872,7 +598,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanR : public Action
+class TrackPanR : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -916,7 +642,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanRPercent : public Action
+class TrackPanRPercent : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -960,7 +686,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanAutoLeft : public Action
+class TrackPanAutoLeft : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1026,7 +752,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanAutoRight : public Action
+class TrackPanAutoRight : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1089,7 +815,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackRecordArm : public Action
+class TrackRecordArm : public SwitchAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1123,7 +849,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackRecordArmDisplay : public Action
+class TrackRecordArmDisplay : public DisplayAction
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1410,7 +1136,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendVolume : public Action
+class TrackSendVolume : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1463,7 +1189,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendVolumeDB : public Action
+class TrackSendVolumeDB : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1509,7 +1235,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendPan : public Action
+class TrackSendPan : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1562,7 +1288,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendPanPercent : public Action
+class TrackSendPanPercent : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1748,7 +1474,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceiveVolume : public Action
+class TrackReceiveVolume : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1796,7 +1522,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceiveVolumeDB : public Action
+class TrackReceiveVolumeDB : public VolumeAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1839,7 +1565,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceivePan : public Action
+class TrackReceivePan : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -1887,7 +1613,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceivePanPercent : public Action
+class TrackReceivePanPercent : public PanAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2071,7 +1797,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXNameDisplay : public Action
+class FXNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2087,7 +1813,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXMenuNameDisplay : public Action
+class FXMenuNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2139,7 +1865,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXParamNameDisplay : public Action
+class FXParamNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2164,7 +1890,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TCPFXParamNameDisplay : public Action
+class TCPFXParamNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2196,7 +1922,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXParamValueDisplay : public Action
+class FXParamValueDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2216,7 +1942,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TCPFXParamValueDisplay : public Action
+class TCPFXParamValueDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2251,7 +1977,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class LastTouchedFXParamNameDisplay : public Action
+class LastTouchedFXParamNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2278,7 +2004,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class LastTouchedFXParamValueDisplay : public Action
+class LastTouchedFXParamValueDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2305,7 +2031,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendNameDisplay : public Action
+class TrackSendNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2357,12 +2083,13 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendVolumeDisplay : public Action
+class TrackSendVolumeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackSendVolumeDisplay"; }
-    
+    virtual bool IsVolumeRelated() { return true; }
+
     virtual void RequestUpdate(ActionContext *context) override
     {
         if (MediaTrack *track = context->GetTrack())
@@ -2387,11 +2114,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendPanDisplay : public Action
+class TrackSendPanDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackSendPanDisplay"; }
+    virtual bool IsPanRelated() { return true; }
     
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2443,7 +2171,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackSendPrePostDisplay : public Action
+class TrackSendPrePostDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2480,7 +2208,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceiveNameDisplay : public Action
+class TrackReceiveNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2534,11 +2262,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceiveVolumeDisplay : public Action
+class TrackReceiveVolumeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackReceiveVolumeDisplay"; }
+    virtual bool IsVolumeRelated() { return true; }
     
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2560,12 +2289,13 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceivePanDisplay : public Action
+class TrackReceivePanDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackReceivePanDisplay"; }
-    
+    virtual bool IsPanRelated() { return true; }
+
     virtual void RequestUpdate(ActionContext *context) override
     {
         if (MediaTrack *track = context->GetTrack())
@@ -2614,7 +2344,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackReceivePrePostDisplay : public Action
+class TrackReceivePrePostDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2651,7 +2381,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FixedTextDisplay : public Action
+class FixedTextDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2664,7 +2394,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FixedRGBColorDisplay : public Action
+class FixedRGBColorDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2677,7 +2407,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackNameDisplay : public Action
+class TrackNameDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2699,7 +2429,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackNumberDisplay : public Action
+class TrackNumberDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2721,7 +2451,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackRecordInputDisplay : public Action
+class TrackRecordInputDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2777,7 +2507,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackInvertPolarityDisplay : public Action
+class TrackInvertPolarityDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -2798,11 +2528,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackVolumeDisplay : public Action
+class TrackVolumeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackVolumeDisplay"; }
+    virtual bool IsVolumeRelated() { return true; }
 
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2821,11 +2552,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanDisplay : public Action
+class TrackPanDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackPanDisplay"; }
+    virtual bool IsPanRelated() { return true; }
 
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2843,12 +2575,13 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanWidthDisplay : public Action
+class TrackPanWidthDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackPanWidthDisplay"; }
-    
+    virtual bool IsPanRelated() { return true; }
+
     virtual void RequestUpdate(ActionContext *context) override
     {
         if (MediaTrack *track = context->GetTrack())
@@ -2864,11 +2597,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanLeftDisplay : public Action
+class TrackPanLeftDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackPanLeftDisplay"; }
+    virtual bool IsPanRelated() { return true; }
     
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2885,11 +2619,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanRightDisplay : public Action
+class TrackPanRightDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackPanRightDisplay"; }
+    virtual bool IsPanRelated() { return true; }
     
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2906,11 +2641,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackPanAutoLeftDisplay : public Action
+class TrackPanAutoLeftDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char *GetName() override { return "TrackPanAutoLeftDisplay"; }
+    virtual bool IsPanRelated() { return true; }
     
     virtual void RequestUpdate(ActionContext *context) override
     {
@@ -2940,7 +2676,8 @@ class TrackPanAutoRightDisplay : public Action
 {
 public:
     virtual const char *GetName() override { return "TrackPanAutoRightDisplay"; }
-    
+    virtual bool IsPanRelated() { return true; }
+
     virtual void RequestUpdate(ActionContext *context) override
     {
         if (MediaTrack *track = context->GetTrack())
@@ -3011,18 +2748,18 @@ public:
         
         if (value > 0.5)
         {
-            if ( ! strcmp(amount, "Bar"))
+            if (IsSameString(amount, "Bar")) //FIXME: replace all string- with enum- comparison and do early choice in context construction
                 DAW::SendCommandMessage(41042); // move to next bar
             
-            else if ( ! strcmp(amount, "Marker"))
+            else if (IsSameString(amount, "Marker")) //FIXME: replace all string- with enum- comparison and do early choice in context construction
                 DAW::SendCommandMessage(40173); // move to next marker/region
         }
         else if (value < 0.5)
         {
-            if ( ! strcmp(amount, "Bar"))
+            if (IsSameString(amount, "Bar")) //FIXME: replace all string- with enum- comparison and do early choice in context construction
                 DAW::SendCommandMessage(41043); // move to previous bar
             
-            else if ( ! strcmp(amount, "Marker"))
+            else if (IsSameString(amount, "Marker")) //FIXME: replace all string- with enum- comparison and do early choice in context construction
                 DAW::SendCommandMessage(40172); // move to previous marker/region
         }
     }
@@ -3264,7 +3001,7 @@ public:
     {
         double retVal = 0.0;
         
-        const vector<MediaTrack *> &selectedTracks = context->GetPage()->GetSelectedTracks();
+        const vector<MediaTrack *> &selectedTracks = context->GetPage()->GetSelectedTracks(true);
         for (auto selectedTrack : selectedTracks)
         {
             if (context->GetIntParam() == GetMediaTrackInfo_Value(selectedTrack, "I_AUTOMODE"))
@@ -3288,9 +3025,13 @@ public:
         
         int mode = context->GetIntParam();
         
-        const vector<MediaTrack *> &selectedTracks = context->GetPage()->GetSelectedTracks();
-        for (auto selectedTrack : selectedTracks)
-            GetSetMediaTrackInfo(selectedTrack, "I_AUTOMODE", &mode);
+        if (IsSameString(context->GetZone()->GetNavigator()->GetName(), "MasterTrackNavigator")) { //FIXME: replace string- comparison with bool flag early in context construction
+            GetSetMediaTrackInfo(GetMasterTrack(NULL), "I_AUTOMODE", &mode);
+        } else {
+            const vector<MediaTrack *> &selectedTracks = context->GetPage()->GetSelectedTracks(true);
+            for (auto selectedTrack : selectedTracks)
+                GetSetMediaTrackInfo(selectedTrack, "I_AUTOMODE", &mode);
+        }
     }
 };
 
@@ -3376,7 +3117,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackAutoModeDisplay : public Action
+class TrackAutoModeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3390,7 +3131,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackVCALeaderDisplay : public Action
+class TrackVCALeaderDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3411,7 +3152,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackFolderParentDisplay : public Action
+class TrackFolderParentDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3513,7 +3254,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class GlobalAutoModeDisplay : public Action
+class GlobalAutoModeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3527,7 +3268,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackInputMonitorDisplay : public Action
+class TrackInputMonitorDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3541,7 +3282,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class MCUTimeDisplay : public Action
+class MCUTimeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3554,7 +3295,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class OSCTimeDisplay : public Action
+class OSCTimeDisplay : public DisplayAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3632,7 +3373,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackOutputMeter : public Action
+class TrackOutputMeter : public MeterAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3653,7 +3394,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackOutputMeterAverageLR : public Action
+class TrackOutputMeterAverageLR : public MeterAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3676,7 +3417,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackVolumeWithMeterAverageLR : public Action
+class TrackVolumeWithMeterAverageLR : public MeterAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3736,7 +3477,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackOutputMeterMaxPeakLR : public Action
+class TrackOutputMeterMaxPeakLR : public MeterAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3762,7 +3503,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackVolumeWithMeterMaxPeakLR : public Action
+class TrackVolumeWithMeterMaxPeakLR : public MeterAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
@@ -3825,7 +3566,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class FXGainReductionMeter : public Action
+class FXGainReductionMeter : public MeterAction
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:

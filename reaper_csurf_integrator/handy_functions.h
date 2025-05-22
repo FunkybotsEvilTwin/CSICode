@@ -21,6 +21,8 @@
 #include <iostream>
 #include <vector>
 
+using namespace std;
+
 static double int14ToNormalized(unsigned char msb, unsigned char lsb)
 {
     int val = lsb | (msb<<7);
@@ -66,25 +68,35 @@ enum DebugLevel {
     DEBUG_LEVEL_DEBUG   = 4
 };
 
-template <typename... Args>
-static void LogToConsole(int size, const char* format, Args... args)
-{
-    vector<char> buffer(size);
-    snprintf(buffer.data(), buffer.size(), format, args...);
-    ShowConsoleMsg(buffer.data());
-#ifdef _DEBUG
+static void LogMessage(const char* msg) {
     ofstream logFile(string(GetResourcePath()) + "/CSI/CSI.log", ios::app);
-    if (logFile.is_open())
-    {
+    if (logFile.is_open()) {
         char timeStr[32];
         time_t rawtime;
         time(&rawtime);
         struct tm* timeinfo = localtime(&rawtime);
         strftime(timeStr, sizeof(timeStr), "[%y-%m-%d %H:%M:%S] ", timeinfo);
 
-        logFile << timeStr << buffer.data();
+        logFile << timeStr << msg;
     }
-#endif
+}
+
+template <size_t N, typename... Args>
+static void LogToConsole(const char (&format)[N], Args&&... args) {
+    std::vector<char> buffer(2048);
+    std::snprintf(buffer.data(), buffer.size(), format, std::forward<Args>(args)...);
+    ShowConsoleMsg(buffer.data());
+    // #ifdef _DEBUG
+        LogMessage(buffer.data());
+    // #endif
+}
+
+// For literal-only messages with no formatting
+static void LogToConsole(const char* message) {
+    ShowConsoleMsg(message);
+    // #ifdef _DEBUG
+        LogMessage(message);
+    // #endif
 }
 
 static void LogStackTraceToConsole() {
@@ -102,7 +114,7 @@ static void LogStackTraceToConsole() {
 #ifdef _DEBUG
   #if defined(__cpp_lib_stacktrace)
     auto trace = stacktrace::current();
-    LogToConsole(256, "===== Stack Trace Start =====\n");
+    LogToConsole("===== Stack Trace Start =====\n");
     for (const auto& frame : trace) {
         stringstream ss;
         ss << frame;
@@ -117,30 +129,68 @@ static void LogStackTraceToConsole() {
             if (pos != string::npos)
                 line = line.substr(0, pos);
 
-            LogToConsole(1024, "%s\n", line.c_str());
+            LogToConsole("%s\n", line.c_str());
         }
     }
-    LogToConsole(256, "===== Stack Trace End =====\n");
+    LogToConsole("===== Stack Trace End =====\n");
   #else
-    LogToConsole(256, "LogStackTraceToConsole not supported on this compiler. Refer to reaper_csurf_integrator/handy_functions.h LogStackTraceToConsole() on how to enable it.\n");
+    LogToConsole("LogStackTraceToConsole not supported on this compiler. Refer to reaper_csurf_integrator/handy_functions.h LogStackTraceToConsole() on how to enable it.\n");
   #endif
 #endif
 }
 
-static const char* GetRelativePath(const char* absolutePath)
-{
+static const char* GetRelativePath(const char* absolutePath) {
     const char* resourcePath = GetResourcePath();
     size_t resourcePathLen = strlen(resourcePath);
 
-    if (strncmp(absolutePath, resourcePath, resourcePathLen) == 0)
-    {
+    if (strncmp(absolutePath, resourcePath, resourcePathLen) == 0) {
         const char* rel = absolutePath + resourcePathLen;
         if (*rel == '/' || *rel == '\\')
             ++rel;
-        return rel;
+        static std::string relativePath;
+        relativePath.clear();
+        for (const char* ptr = rel; *ptr != '\0'; ++ptr) {
+            relativePath.push_back(*ptr == '\\' ? '/' : *ptr);
+        }
+        return relativePath.c_str();
     }
 
     return absolutePath;
+}
+
+static bool IsSameString(const char* a, const char* b) {
+    if (a == nullptr || b == nullptr) return false;
+    return strcmp(a, b) == 0;
+}
+static bool IsSameString(const std::string& a, const std::string& b) {
+    return a == b;
+}
+static bool IsSameString(const std::string& a, const char* b) {
+    return IsSameString(a.c_str(), b);
+}
+static bool IsSameString(const char* a, const std::string& b) {
+    return IsSameString(a, b.c_str());
+}
+
+static int ExtractSuffixNumber(const std::string& name) {
+    int result = -1;
+    size_t index = name.length() - 1;
+    while (index >= 0 && isdigit(name[index])) index--;
+    if (index < name.length() - 1) 
+        result = stoi(name.substr(index + 1));
+
+    return result;
+}
+
+template <size_t N>
+std::string JoinStringArray(const std::string (&arr)[N], const std::string& delimiter) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < N; ++i) {
+        oss << arr[i];
+        if (i < N - 1)
+            oss << delimiter;
+    }
+    return oss.str();
 }
 
 #endif /* handy_functions_h */

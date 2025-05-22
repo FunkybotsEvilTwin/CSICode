@@ -100,7 +100,18 @@ extern bool g_fxParamsWrite;
 
 extern REAPER_PLUGIN_HINSTANCE g_hInst;
 
+static vector<HWND> g_openDialogs;
+static void CloseAllDialogs() {
+    for (HWND hwnd : g_openDialogs)
+        if (IsWindow(hwnd))
+            DestroyWindow(hwnd);
+    g_openDialogs.clear();
+}
+
+static const char * const REASCRIPT_PATH__CSI_OSD = "/Scripts/CSI/CSI OSD on-screen display.lua";
+static const char * const REASCRIPT_HASH__CSI_OSD = "_RSba74d8dbb9258d14b5305a183a5f20e8a6e0f64f";
 static const int REAPER__CONTROL_SURFACE_REFRESH_ALL_SURFACES = 41743;
+static const int REAPER__RESET_ALL_MIDI_CONTROL_SURFACE_DEVICES = 42348;
 static const int REAPER__FILE_NEW_PROJECT = 40023;
 static const int REAPER__FILE_OPEN_PROJECT = 40025;
 static const int REAPER__CLOSE_CURRENT_PROJECT_TAB = 40860;
@@ -127,6 +138,7 @@ static char *format_number(double v, char *buf, int bufsz)
 
 extern void GetTokens(vector<string> &tokens, const string &line);
 extern void GetTokens(vector<string> &tokens, const string &line, char delimiter);
+static bool IsCommentedOrEmpty(string& line) { return line == "" || line[0] == '\r' || line[0] == '/'; }
 
 class ReloadPluginException : public std::runtime_error {
 public:
@@ -164,6 +176,8 @@ enum PropertyType {
   D(Feedback) \
   D(HoldDelay) \
   D(HoldRepeatInterval) \
+  D(RunCount) \
+  D(OSD) \
   D(Version) \
   D(SurfaceType) \
   D(SurfaceName) \
@@ -290,7 +304,7 @@ class PropertyList
 
     static PropertyType prop_from_string(const char *str)
     {
-#define CHK(x) if (!strcmp(str,#x)) return PropertyType_##x;
+#define CHK(x) if (IsSameString(str,#x)) return PropertyType_##x;
         DECLARE_PROPERTY_TYPES(CHK)
 #undef CHK
         return PropertyType_Unknown;
@@ -350,6 +364,13 @@ public:
     virtual ~Action() {}
     
     virtual const char *GetName() { return "Action"; }
+    virtual bool IsModifier() { return false; }
+    virtual bool IsSwitch() { return false; }
+    virtual bool IsDisplayRelated() { return false; }
+    virtual bool IsMeterRelated() { return false; }
+    virtual bool IsVolumeRelated() { return false; }
+    virtual bool IsPanRelated() { return false; }
+    virtual bool IsFxRelated() { return false; }
 
     virtual void Touch(ActionContext *context, double value) {}
     virtual void RequestUpdate(ActionContext *context) {}
@@ -501,7 +522,10 @@ private:
     int paramIndex_ = 0;
     string fxParamDisplayName_;
     
+    string actionTitle_ = "";
     int commandId_ = 0;
+    const char* commandText_;
+    bool needsReloadAfterRun_ = false;
     
     double rangeMinimum_ = 0.0;
     double rangeMaximum_ = 1.0;
@@ -517,14 +541,19 @@ private:
     
     bool isValueInverted_ = false;
     bool isFeedbackInverted_ = false;
+    
+    bool isDoublePress_ = false;
+    DWORD doublePressStartTs_ = 0;
 
     int  holdDelayMs_ = 0;
     int  holdRepeatIntervalMs_ = 0;
-    int  lastHoldRepeatTs_ = 0;
-    int  lastHoldStartTs_ = 0;
+    DWORD  lastHoldRepeatTs_ = 0;
+    DWORD  lastHoldStartTs_ = 0;
     bool holdActive_= false;
     bool holdRepeatActive_ = false;
     double deferredValue_ = 0.0;
+    
+    int  runCount_ = 1;
     
     bool supportsColor_ = false;
     vector<rgba_color> colorValues_;
@@ -536,13 +565,18 @@ private:
 
     string m_freeFormText;
 
+    osd_data osdData_;
+    
     PropertyList widgetProperties_;
         
     void UpdateTrackColor();
     void GetSteppedValues(Widget *widget, Action *action,  Zone *zone, int paramNumber, const vector<string> &params, const PropertyList &widgetProperties, double &deltaValue, vector<double> &acceleratedDeltaValues, double &rangeMinimum, double &rangeMaximum, vector<double> &steppedValues, vector<int> &acceleratedTickValues);
     void SetColor(const vector<string> &params, bool &supportsColor, bool &supportsTrackColor, vector<rgba_color> &colorValues);
     void GetColorValues(vector<rgba_color> &colorValues, const vector<string> &colors);
+    void ProcessActionTitle(string fallbackName);
     void LogAction(double value);
+    void ProcessOSD(double value, bool fromFeedback);
+    bool OsdIgnoresButtonRelease();
 public:
     static int constexpr HOLD_DELAY_INHERIT_VALUE = -1;
     static double constexpr BUTTON_RELEASE_MESSAGE_VALUE = 0.0;
@@ -560,6 +594,8 @@ public:
 
     int GetIntParam() { return intParam_; }
     int GetCommandId() { return commandId_; }
+    const char* GetCommandText() { return commandText_; }
+    bool NeedsReloadAfterRun() { return needsReloadAfterRun_; }
     
     const char *GetFXParamDisplayName() { return fxParamDisplayName_.c_str(); }
     
@@ -579,6 +615,8 @@ public:
     
     void SetIsValueInverted() { isValueInverted_ = true; }
     void SetIsFeedbackInverted() { isFeedbackInverted_ = true; }
+    void SetDoublePress() { isDoublePress_ = true; }
+    bool IsDoublePress() { return isDoublePress_; }
     void SetHoldDelay(int value) { holdDelayMs_ = value; }
     int GetHoldDelay() { return holdDelayMs_; }
 
@@ -697,9 +735,9 @@ public:
         {
             if (!dualPan || !dualPan[0])
                 lstrcpyn_safe(buf, "  <C>  ", bufsz);
-            else if (!strcmp(dualPan, "L"))
+            else if (IsSameString(dualPan, "L"))
                 lstrcpyn_safe(buf, " L<C>  ", bufsz);
-            else if (!strcmp(dualPan, "R"))
+            else if (IsSameString(dualPan, "R"))
                 lstrcpyn_safe(buf, " <C>R  ", bufsz);
         }
 
@@ -728,6 +766,9 @@ public:
 
     const char* GetFreeFormText() const { return m_freeFormText.c_str(); }
     void SetFreeFormText(const char* text) { m_freeFormText = (text ? text : ""); }
+
+    const char* GetActionTitle();
+
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -793,7 +834,7 @@ public:
     void SetNavigator(Navigator *navigator) {  navigator_ = navigator; }
     void SetSlotIndex(int index) { slotIndex_ = index; }
     bool GetIsActive() { return isActive_; }
-        
+
     void Toggle()
     {
         if (isActive_)
@@ -844,7 +885,7 @@ public:
     {
         for (auto &subZone : subZones_)
         {
-            if ( ! strcmp(subZone->GetName(), subZoneName))
+            if (IsSameString(subZone->GetName(), subZoneName))
             {
                 subZone->SetSlotIndex(GetSlotIndex());
                 subZone->Activate();
@@ -895,7 +936,6 @@ public:
     virtual void ForceValue(const PropertyList &properties, const char * const &value) {}
     virtual void ForceColorValue(const rgba_color &color) {}
     virtual void ForceUpdateTrackColors() {}
-    virtual void RunDeferredActions() {}
     virtual void ForceClear() {}
 
     virtual void SetXTouchDisplayColors(const char *colors) {}
@@ -972,22 +1012,18 @@ protected:
     
     bool hasBeenUsedByUpdate_ = false;
     
+    bool isVirtual_ = false;
     bool isTwoState_ = false;
-    
+    bool hasDoublePressActions_ = false;
 public:
     // all Widgets are owned by their ControlSurface!
     Widget(CSurfIntegrator *const csi,  ControlSurface *surface, const char *name) : csi_(csi), surface_(surface), name_(name)
     {
-        int index = (int)strlen(name) - 1;
-        if (isdigit(name[index]))
-        {
-            while (index>=0 && isdigit(name[index]))
-                index--;
-               
-            index++;
-            
-            channelNumber_ = atoi(name + index);
-        }
+        int suffixNumber = ExtractSuffixNumber(name);
+        if (suffixNumber > 0)
+            channelNumber_ = suffixNumber;
+
+        isVirtual_ = find(VIRTUAL_TRIGGERS.begin(), VIRTUAL_TRIGGERS.end(), name) != VIRTUAL_TRIGGERS.end();
     }
     
     ~Widget()
@@ -997,6 +1033,19 @@ public:
     
     vector<unique_ptr<FeedbackProcessor>> &GetFeedbackProcessors() { return feedbackProcessors_; }
     
+    static inline const vector<string> VIRTUAL_TRIGGERS = {
+        "OnTrackSelection",
+        "OnPageEnter",
+        "OnPageLeave",
+        "OnInitialization",
+        "OnPlayStart",
+        "OnPlayStop",
+        "OnRecordStart",
+        "OnRecordStop",
+        "OnZoneActivation",
+        "OnZoneDeactivation"
+    };
+    
     void ClearHasBeenUsedByUpdate() { hasBeenUsedByUpdate_ = false; }
     void SetHasBeenUsedByUpdate() { hasBeenUsedByUpdate_ = true; }
     bool GetHasBeenUsedByUpdate() { return hasBeenUsedByUpdate_; }
@@ -1004,13 +1053,15 @@ public:
     const char *GetName() { return name_.c_str(); }
     ControlSurface *GetSurface() { return surface_; }
     ZoneManager *GetZoneManager();
+    bool IsVirtual() { return isVirtual_; }
+
     int GetChannelNumber() { return channelNumber_; }
     
     void SetStepSize(double stepSize) { stepSize_ = stepSize; }
     double GetStepSize() { return stepSize_; }
     bool GetIsTwoState() { return isTwoState_; }
     void SetIsTwoState() { isTwoState_ = true; }
-    
+
     void SetAccelerationValues(const vector<double> accelerationValues) { accelerationValues_ = accelerationValues; }
     const vector<double> &GetAccelerationValues() { return accelerationValues_; }
     
@@ -1024,11 +1075,14 @@ public:
     void UpdateValue(const PropertyList &properties, double value);
     void UpdateValue(const PropertyList &properties, const char * const &value);
     void ForceValue(const PropertyList &properties, const char * const &value);
-    void RunDeferredActions();
     void UpdateColorValue(const rgba_color &color);
     void SetXTouchDisplayColors(const char *colors);
     void RestoreXTouchDisplayColors();
     void ForceClear();
+
+    void SetHasDoublePressActions() { hasDoublePressActions_ = true; };
+    bool HasDoublePressActions() { return hasDoublePressActions_; };
+
     void LogInput(double value);
 };
 
@@ -1096,7 +1150,7 @@ private:
 
     void GoFXSlot(MediaTrack *track, Navigator *navigator, int fxSlot);
     void GoSelectedTrackFX();
-    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &isDecrease, bool &isIncrease);
+    void GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &HasDoublePressPseudoModifier, bool &isDecrease, bool &isIncrease);
     void GetNavigatorsForZone(const char *zoneName, const char *navigatorName, vector<Navigator *> &navigators);
     void LoadZones(vector<unique_ptr<Zone>> &zones, vector<string> &zoneList);
          
@@ -1113,14 +1167,14 @@ private:
         {
             ifstream file(filePath);
             
-            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] LoadZoneMetadata: %s\n", GetRelativePath(filePath));
+            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] LoadZoneMetadata: %s\n", GetRelativePath(filePath));
             for (string line; getline(file, line) ; )
             {
                 TrimLine(line);
                 
                 lineNumber++;
                 
-                if (line == "" || (line.size() > 0 && line[0] == '/')) // ignore blank lines and comment lines
+                if (IsCommentedOrEmpty(line))
                     continue;
                 
                 vector<string> tokens;
@@ -1134,8 +1188,8 @@ private:
         }
         catch (const std::exception& e)
         {
-            LogToConsole(256, "[ERROR] FAILED to LoadZoneMetadata in %s, around line %d\n", filePath, lineNumber);
-            LogToConsole(2048, "Exception: %s\n", e.what());
+            LogToConsole("[ERROR] FAILED to LoadZoneMetadata in %s, around line %d\n", filePath, lineNumber);
+            LogToConsole("Exception: %s\n", e.what());
         }
     }
     
@@ -1172,25 +1226,25 @@ private:
     
     void ListenToGoZone(const char *zoneName)
     {
-        if (!strcmp("SelectedTrackSend", zoneName))
+        if (IsSameString("SelectedTrackSend", zoneName))
             for (auto &listener : listeners_)
             {
                 if (listener->GetListensToSends())
                     listener->GoZone(zoneName);
             }
-        else if (!strcmp("SelectedTrackReceive", zoneName))
+        else if (IsSameString("SelectedTrackReceive", zoneName))
             for (auto &listener : listeners_)
             {
                 if (listener->GetListensToReceives())
                     listener->GoZone(zoneName);
             }
-        else if (!strcmp("SelectedTrackFX", zoneName))
+        else if (IsSameString("SelectedTrackFX", zoneName))
             for (auto &listener : listeners_)
             {
                 if (listener->GetListensToSelectedTrackFX())
                     listener->GoZone(zoneName);
             }
-        else if (!strcmp("SelectedTrackFXMenu", zoneName))
+        else if (IsSameString("SelectedTrackFXMenu", zoneName))
             for (auto &listener : listeners_)
             {
                 if (listener->GetListensToFXMenu())
@@ -1202,19 +1256,19 @@ private:
     
     void ListenToClearFXZone(const char *zoneToClear)
     {
-        if (!strcmp("LastTouchedFXParam", zoneToClear))
+        if (IsSameString("LastTouchedFXParam", zoneToClear))
             for (auto &listener : listeners_)
                 listener->ClearLastTouchedFXParam();
-        else if (!strcmp("FocusedFX", zoneToClear))
+        else if (IsSameString("FocusedFX", zoneToClear))
             for (auto &listener : listeners_)
                 listener->ClearFocusedFX();
-        else if (!strcmp("SelectedTrackFX", zoneToClear))
+        else if (IsSameString("SelectedTrackFX", zoneToClear))
             for (auto &listener : listeners_)
             {
                 if (listener->GetListensToSelectedTrackFX())
                     listener->GoZone(zoneToClear);
             }
-        else if (!strcmp("FXSlot", zoneToClear))
+        else if (IsSameString("FXSlot", zoneToClear))
             for (auto &listener : listeners_)
             {
                 if (listener->GetListensToFXMenu())
@@ -1307,7 +1361,7 @@ private:
     void ReactivateFXMenuZone()
     {
         for (int i = 0; i < goZones_.size(); ++i)
-            if (!strcmp(goZones_[i]->GetName(), "TrackFXMenu") || !strcmp(goZones_[i]->GetName(), "SelectedTrackFXMenu"))
+            if (IsSameString(goZones_[i]->GetName(), "TrackFXMenu") || IsSameString(goZones_[i]->GetName(), "SelectedTrackFXMenu"))
                 if (goZones_[i]->GetIsActive())
                     goZones_[i]->Activate();
     }
@@ -1501,12 +1555,12 @@ public:
         
         for (int i = 0; i < goZones_.size(); ++i)
         {
-            if (!strcmp(zoneName, goZones_[i]->GetName()))
+            if (IsSameString(zoneName, goZones_[i]->GetName()))
             {
                 if (goZones_[i]->GetIsActive())
                 {
                     for (int j = i; j < goZones_.size(); ++j)
-                        if (!strcmp(zoneName, goZones_[j]->GetName()))
+                        if (IsSameString(zoneName, goZones_[j]->GetName()))
                             goZones_[j]->Deactivate();
                     
                     return;
@@ -1515,14 +1569,14 @@ public:
         }
         
         for (auto &goZone : goZones_)
-            if (strcmp(zoneName, goZone->GetName()))
+            if (!IsSameString(zoneName, goZone->GetName()))
                 goZone->Deactivate();
         
         for (auto &goZone : goZones_)
-            if (!strcmp(zoneName, goZone->GetName()))
+            if (IsSameString(zoneName, goZone->GetName()))
                goZone->Activate();
         
-        if ( ! strcmp(zoneName, "SelectedTrackFX"))
+        if (IsSameString(zoneName, "SelectedTrackFX"))
             GoSelectedTrackFX();
     }
     
@@ -1530,13 +1584,13 @@ public:
     {
         if (! GetIsBroadcaster() && ! GetIsListener()) // No Broadcasters/Listeners relationships defined
         {
-            if (!strcmp("LastTouchedFXParam", zoneName))
+            if (IsSameString("LastTouchedFXParam", zoneName))
                 ClearLastTouchedFXParam();
-            else if (!strcmp("FocusedFX", zoneName))
+            else if (IsSameString("FocusedFX", zoneName))
                 ClearFocusedFX();
-            else if (!strcmp("SelectedTrackFX", zoneName))
+            else if (IsSameString("SelectedTrackFX", zoneName))
                 ClearSelectedTrackFX();
-            else if (!strcmp("FXSlot", zoneName))
+            else if (IsSameString("FXSlot", zoneName))
                 ClearFXSlot();
         }
         else
@@ -1625,10 +1679,10 @@ public:
         
         for (auto &goZone : goZones_)
         {
-            if (!strcmp(goZone->GetName(), "SelectedTrack") ||
-                !strcmp(goZone->GetName(), "SelectedTrackSend") ||
-                !strcmp(goZone->GetName(), "SelectedTrackReceive") ||
-                !strcmp(goZone->GetName(), "SelectedTrackFXMenu"))
+            if (IsSameString(goZone->GetName(), "SelectedTrack") ||
+                IsSameString(goZone->GetName(), "SelectedTrackSend") ||
+                IsSameString(goZone->GetName(), "SelectedTrackReceive") ||
+                IsSameString(goZone->GetName(), "SelectedTrackFXMenu"))
             {
                 goZone->Deactivate();
             }
@@ -1668,7 +1722,7 @@ public:
     bool GetIsGoZoneActive(const char *zoneName)
     {
         for (auto &goZone : goZones_)
-            if (!strcmp(zoneName, goZone->GetName()))
+            if (IsSameString(zoneName, goZone->GetName()))
                 return goZone->GetIsActive();
         
         return false;
@@ -1694,29 +1748,27 @@ public:
         
     void AdjustBank(const char *zoneName, int amount)
     {
-        if (!strcmp(zoneName, "TrackSend"))
+        if (IsSameString(zoneName, "TrackSend"))
             AdjustBank(trackSendOffset_, amount);
-        else if (!strcmp(zoneName, "TrackReceive"))
+        else if (IsSameString(zoneName, "TrackReceive"))
             AdjustBank(trackReceiveOffset_, amount);
-        else if (!strcmp(zoneName, "TrackFXMenu"))
+        else if (IsSameString(zoneName, "TrackFXMenu"))
             AdjustBank(trackFXMenuOffset_, amount);
-        else if (!strcmp(zoneName, "SelectedTrackSend"))
+        else if (IsSameString(zoneName, "SelectedTrackSend"))
             AdjustBank(selectedTrackSendOffset_, amount);
-        else if (!strcmp(zoneName, "SelectedTrackReceive"))
+        else if (IsSameString(zoneName, "SelectedTrackReceive"))
             AdjustBank(selectedTrackReceiveOffset_, amount);
-        else if (!strcmp(zoneName, "SelectedTrackFXMenu"))
+        else if (IsSameString(zoneName, "SelectedTrackFXMenu"))
             AdjustBank(selectedTrackFXMenuOffset_, amount);
-        else if (!strcmp(zoneName, "MasterTrackFXMenu"))
+        else if (IsSameString(zoneName, "MasterTrackFXMenu"))
             AdjustBank(masterTrackFXMenuOffset_, amount);
     }
                 
     void AddZoneFilePath(const string &name, CSIZoneInfo &zoneInfo)
     {
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] AddZoneFilePath %s\n", GetRelativePath(name.c_str()));
-        if (zoneInfo_.find(name) == zoneInfo_.end())
+        if (zoneInfo_.find(name) == zoneInfo_.end()) {
             zoneInfo_[name] = zoneInfo;
-        else
-        {
+        } else {
             CSIZoneInfo &info = zoneInfo_[name];
             info.alias = zoneInfo.alias;
         }
@@ -1821,8 +1873,6 @@ private:
     Page *page_;
     ControlSurface *surface_;
     
-    int latchTime_ = 100;
-    
     enum Modifiers
     {
         ErrorModifier = -1,
@@ -1847,16 +1897,16 @@ private:
     
     static Modifiers modifierFromString(const char *s)
     {
-         if (!strcmp(s,"Shift")) return Shift;
-         if (!strcmp(s,"Option")) return Option;
-         if (!strcmp(s,"Control")) return Control;
-         if (!strcmp(s,"Alt")) return Alt;
-         if (!strcmp(s,"Flip")) return Flip;
-         if (!strcmp(s,"Global")) return Global;
-         if (!strcmp(s,"Marker")) return Marker;
-         if (!strcmp(s,"Nudge")) return Nudge;
-         if (!strcmp(s,"Zoom")) return Zoom;
-         if (!strcmp(s,"Scrub")) return Scrub;
+         if (IsSameString(s,"Shift")) return Shift;
+         if (IsSameString(s,"Option")) return Option;
+         if (IsSameString(s,"Control")) return Control;
+         if (IsSameString(s,"Alt")) return Alt;
+         if (IsSameString(s,"Flip")) return Flip;
+         if (IsSameString(s,"Global")) return Global;
+         if (IsSameString(s,"Marker")) return Marker;
+         if (IsSameString(s,"Nudge")) return Nudge;
+         if (IsSameString(s,"Zoom")) return Zoom;
+         if (IsSameString(s,"Scrub")) return Scrub;
          return ErrorModifier;
     }
 
@@ -2091,7 +2141,7 @@ public:
 struct ChannelTouch
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
-    int channelNum = 0;;
+    int channelNum = 0;
     bool isTouched = false;
     
     ChannelTouch() {}
@@ -2125,7 +2175,10 @@ private:
     bool listensToModifiers_ = false;
         
     int latchTime_ = 100;
-        
+    int doublePressTime_ = 400;
+    
+    bool isOsdEnabled_= false;
+
     vector<FeedbackProcessor *> trackColorFeedbackProcessors_; // does not own pointers
     
     vector<ChannelTouch> channelTouches_;
@@ -2153,6 +2206,7 @@ protected:
     int const channelOffset_;
     
     int holdTimeMs_ = 1000;
+    int osdTimeMs_ = 3000;
 
     vector<Widget *> widgets_; // owns list
     map<const string, unique_ptr<Widget>> widgetsByName_;
@@ -2209,17 +2263,9 @@ protected:
     
     virtual void InitHardwiredWidgets(ControlSurface *surface)
     {
-        // Add the "hardwired" widgets
-        AddWidget(surface, "OnTrackSelection");
-        AddWidget(surface, "OnPageEnter");
-        AddWidget(surface, "OnPageLeave");
-        AddWidget(surface, "OnInitialization");
-        AddWidget(surface, "OnPlayStart");
-        AddWidget(surface, "OnPlayStop");
-        AddWidget(surface, "OnRecordStart");
-        AddWidget(surface, "OnRecordStop");
-        AddWidget(surface, "OnZoneActivation");
-        AddWidget(surface, "OnZoneDeactivation");
+        for (const std::string& name : Widget::VIRTUAL_TRIGGERS) {
+            AddWidget(surface, name.c_str());
+        }
     }
     
     void DoWidgetAction(const string &widgetName)
@@ -2302,9 +2348,15 @@ public:
 
     void SetLatchTime(int latchTime) { latchTime_ = latchTime; }
     int GetLatchTime() { return latchTime_; }
-
+    
     void SetHoldTime(int value) { holdTimeMs_ = value; }
     int GetHoldTime() { return holdTimeMs_; }
+    
+    void SetDoublePressTime(int doublePressTime) { doublePressTime_ = doublePressTime; }
+    int GetDoublePressTime() { return doublePressTime_; }
+
+    void SetOSDTime(int value) { osdTimeMs_ = value; }
+    int GetOSDTime() { return osdTimeMs_; }
 
     void UpdateCurrentActionContextModifiers()
     {
@@ -2533,6 +2585,10 @@ public:
     void OnInitialization()
     {
         DoWidgetAction("OnInitialization");
+    }
+    bool IsOsdEnabled() { return isOsdEnabled_; }
+    void SetOsdEnabled(bool value) {
+        isOsdEnabled_ = value;
     }
 };
 
@@ -3051,10 +3107,11 @@ protected:
             // Check if the selected track is in the current folder
             MediaTrack* parentTrack = GetParentTrack(selectedTrack);
             int parentTrackId = parentTrack ? GetIdFromTrack(parentTrack) : 0;
-            if (currentFolderTrackID_ = parentTrackId)
+
+            if (currentFolderTrackID_ != parentTrackId)
             {
                 // If not, chenge the current folder to the selected track's parent
-                currentFolderTrackID_ = parentTrack ? GetIdFromTrack(parentTrack) : 0;
+                currentFolderTrackID_ = parentTrackId;
                 RebuildTracks();
             }
 
@@ -3267,12 +3324,14 @@ public:
             return "";
     }
     
-    const vector<MediaTrack *> &GetSelectedTracks()
+    const vector<MediaTrack *> &GetSelectedTracks(bool includeMaster = false)
     {
         selectedTracks_.clear();
-        
-        for (int i = 0; i < CountSelectedTracks2(NULL, false); ++i)
-            selectedTracks_.push_back(DAW::GetSelectedTrack(i));
+
+        for (int i = (includeMaster ? 0 : 1); i <= GetNumTracks(); i++) {
+            MediaTrack* track = CSurf_TrackFromID(i, false);
+            if (*(int*)GetSetMediaTrackInfo(track, "I_SELECTED", NULL)) selectedTracks_.push_back(track);
+        }
         
         return selectedTracks_;
     }
@@ -3610,10 +3669,10 @@ public:
     
     MediaTrack *GetSelectedTrack()
     {
-        if (CountSelectedTracks2(NULL, false) != 1)
+        if (selectedTracks_.size() != 1)
             return NULL;
         else
-            return DAW::GetSelectedTrack(0);
+            return selectedTracks_[0];
     }
     
 //  Page only uses the following:
@@ -3942,15 +4001,15 @@ public:
     
     void AdjustBank(const char *zoneName, int amount)
     {
-        if (!strcmp(zoneName, "Track"))
+        if (IsSameString(zoneName, "Track"))
             trackNavigationManager_->AdjustTrackBank(amount);
-        else if (!strcmp(zoneName, "VCA"))
+        else if (IsSameString(zoneName, "VCA"))
             trackNavigationManager_->AdjustVCABank(amount);
-        else if (!strcmp(zoneName, "Folder"))
+        else if (IsSameString(zoneName, "Folder"))
             trackNavigationManager_->AdjustFolderBank(amount);
-        else if (!strcmp(zoneName, "SelectedTracks"))
+        else if (IsSameString(zoneName, "SelectedTracks"))
             trackNavigationManager_->AdjustSelectedTracksBank(amount);
-        else if (!strcmp(zoneName, "SelectedTrack"))
+        else if (IsSameString(zoneName, "SelectedTrack"))
             trackNavigationManager_->AdjustSelectedTrackBank(amount);
         else
             for (auto &surface : surfaces_)
@@ -3996,7 +4055,7 @@ public:
     const char *GetAutoModeDisplayName(int modeIndex) { return trackNavigationManager_->GetAutoModeDisplayName(modeIndex); }
     const char *GetGlobalAutoModeDisplayName() { return trackNavigationManager_->GetGlobalAutoModeDisplayName(); }
     const char *GetCurrentInputMonitorMode(MediaTrack *track) { return trackNavigationManager_->GetCurrentInputMonitorMode(track); }
-    const vector<MediaTrack *> &GetSelectedTracks() { return trackNavigationManager_->GetSelectedTracks(); }
+    const vector<MediaTrack *> &GetSelectedTracks(bool includeMaster = false) { return trackNavigationManager_->GetSelectedTracks(includeMaster); }
     
     
     /*
@@ -4040,19 +4099,19 @@ public:
                 ShowDuration(surfaces_[i]->GetName(), "Request Update", duration);
             }
             
-            LogToConsole(256, "Total duration = %d\n\n\n", totalDuration);
+            LogToConsole("Total duration = %d\n\n\n", totalDuration);
         }
     }
     
     
     void ShowDuration(string item, int duration)
     {
-        LogToConsole(256, "%s - %d microseconds\n", item.c_str(), duration);
+        LogToConsole("%s - %d microseconds\n", item.c_str(), duration);
     }
     
     void ShowDuration(string surface, string item, int duration)
     {
-        LogToConsole(256, "%s - %s - %d microseconds\n", surface.c_str(), item.c_str(), duration);
+        LogToConsole("%s - %s - %d microseconds\n", surface.c_str(), item.c_str(), duration);
     }
    */
 
@@ -4094,7 +4153,7 @@ private:
     bool shouldRun_ = true;
     
     ReaProject* currentProject_ = NULL;
-    
+
     // these are offsets to be passed to projectconfig_var_addr() when needed in order to get the actual pointers
     int timeModeOffs_;
     int timeMode2Offs_;
@@ -4104,7 +4163,7 @@ private:
     
     int projectMetronomePrimaryVolumeOffs_; // for double -- if invalid, use fallbacks
     int projectMetronomeSecondaryVolumeOffs_; // for double -- if invalid, use fallbacks
-        
+
     void InitActionsDictionary();
 
     double GetPrivateProfileDouble(const char *key)
@@ -4116,6 +4175,14 @@ private:
         
         return strtod (tmp, NULL);
     }
+    inline static std::vector<int> reloadingCommandIds_ = {
+        REAPER__CONTROL_SURFACE_REFRESH_ALL_SURFACES,
+        REAPER__RESET_ALL_MIDI_CONTROL_SURFACE_DEVICES,
+        REAPER__FILE_NEW_PROJECT,
+        REAPER__FILE_OPEN_PROJECT,
+        REAPER__CLOSE_CURRENT_PROJECT_TAB,
+        REAPER__TRACK_INSERT_TRACK_FROM_TEMPLATE
+    };
 
 public:
     CSurfIntegrator();
@@ -4195,6 +4262,40 @@ public:
             osara_outputMessage(phrase);
     }
     
+    osd_data QueuedOSD;
+    void OpenOSDPanel() {
+        string scriptsPath = string(GetResourcePath()) + REASCRIPT_PATH__CSI_OSD;
+        int commandId = NamedCommandLookup(REASCRIPT_HASH__CSI_OSD);
+        if (commandId == 0) {
+            commandId = AddRemoveReaScript(true, 0, scriptsPath.c_str(), true);
+            if (commandId == 0) {
+                LogToConsole("[ERROR] FAILED to OpenOSDPanel. AddRemoveReaScript failed for '%s'\n", REASCRIPT_PATH__CSI_OSD);
+                return;
+            }
+            commandId = NamedCommandLookup(REASCRIPT_HASH__CSI_OSD);
+            LogToConsole("[NOTICE] ReaScript %s was loaded: %s (%d)\n", REASCRIPT_PATH__CSI_OSD, REASCRIPT_HASH__CSI_OSD, commandId);
+        }
+        int runningState;
+        for (int attempt = 1; attempt <= 2; ++attempt) {
+            runningState = GetToggleCommandState(commandId);
+            if (runningState == 1) return;
+            if (attempt == 2) {
+                commandId = AddRemoveReaScript(true, 0, scriptsPath.c_str(), true);
+                if (commandId == 0) {
+                    LogToConsole("[ERROR] FAILED to OpenOSDPanel. AddRemoveReaScript failed for '%s'\n", REASCRIPT_PATH__CSI_OSD);
+                    return;
+                }
+                const char* commandHash = ReverseNamedCommandLookup(commandId);
+                if (!IsSameString(REASCRIPT_HASH__CSI_OSD + 1, commandHash))
+                    LogToConsole("[ERROR] Command ID changed for '%s': '%s' >>> '_%s'\n", REASCRIPT_PATH__CSI_OSD, REASCRIPT_HASH__CSI_OSD, commandHash);
+            }
+            DAW::SendCommandMessage(commandId);
+        }
+        runningState = GetToggleCommandState(commandId);
+        LogToConsole("[ERROR] FAILED to OpenOSDPanel. ReaScript: '%s' command ID: %s (%d) state: %d\n", 
+            REASCRIPT_PATH__CSI_OSD, REASCRIPT_HASH__CSI_OSD, commandId, runningState);
+    }
+
     Action *GetFXParamAction(char *FXName)
     {
        if (strstr(FXName, "JS: "))
@@ -4208,11 +4309,7 @@ public:
         if (actions_.find(actionName) != actions_.end())
             return actions_[actionName].get();
         else
-        {
-            LogToConsole(256, "[ERROR] FAILED to GetAction '%s'\n", actionName);
-
-            return actions_["NoAction"].get();
-        }
+            return actions_["InvalidAction"].get();
     }
 
     void OnTrackSelection(MediaTrack *track) override
@@ -4280,7 +4377,7 @@ public:
     {
         for (int i = 0; i < pages_.size(); ++i)
         {
-            if (! strcmp(pages_[i]->GetName(), pageName))
+            if (IsSameString(pages_[i]->GetName(), pageName))
             {
                 if (pages_.size() > currentPageIndex_ && pages_[currentPageIndex_])
                     pages_[currentPageIndex_]->LeavePage();
@@ -4361,9 +4458,27 @@ public:
         TrackFX_GetParamName(track, fxIndex, paramIndex, buf, bufsz);
         return buf;
     }
-        
-    //int repeats = 0;
+
+    void AddReloadingCommandId(int commandId) {
+        if (std::find(reloadingCommandIds_.begin(), reloadingCommandIds_.end(), commandId) == reloadingCommandIds_.end()) {
+            reloadingCommandIds_.push_back(commandId);
+        }
+    }
+
+    const std::vector<int>& GetReloadingCommandIds() {
+        return reloadingCommandIds_;
+    }
     
+    void ShowErrorOSD(string text) {
+        ForceOSD(text, osd_data::COLOR_ERROR);
+    }
+    void ForceOSD(string text, string bgColor = "") {
+        osd_data osdData = osd_data(text);
+        osdData.bgColor = bgColor;
+        QueuedOSD = osdData;
+    }
+    void EnqueueOSD(osd_data osdData_) { QueuedOSD = osdData_; }
+
     void Run() override
     {
         //int start = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
@@ -4377,13 +4492,21 @@ public:
         }
         
         if (shouldRun_ && pages_.size() > currentPageIndex_ && pages_[currentPageIndex_]) {
+            if (!QueuedOSD.isEmpty() && !QueuedOSD.IsAwaitFeedback()) {
+                if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] OSD: %s\n", QueuedOSD.toString().c_str());
+                OpenOSDPanel();
+                DAW::ShowOSD(QueuedOSD);
+                QueuedOSD = osd_data();
+            }
             try {
                 pages_[currentPageIndex_]->Run();
             } catch (const ReloadPluginException& e) {
-                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole(256, "[NOTICE] RELOADING: : %s\n", e.what());
+                if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole("[NOTICE] RELOADING: %s\n", e.what());
                 ResetWidgets();
+                ShutdownLearn();
+                CloseAllDialogs();
             } catch (const std::exception& e) {
-                LogToConsole(256, "[ERROR] # CSurfIntegrator::RUN: %s\n", e.what());
+                LogToConsole("[ERROR] # CSurfIntegrator::RUN: %s\n", e.what());
                 LogStackTraceToConsole();
             }
         }
@@ -4398,7 +4521,7 @@ public:
          
          int duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() - start;
          
-         LogToConsole(256, "%d microseconds\n", duration);
+         LogToConsole("%d microseconds\n", duration);
          }
         */
     }
@@ -4419,7 +4542,7 @@ public:
  
  int duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() - start;
  
- LogToConsole(256, "%d microseconds\n", duration);
+ LogToConsole("%d microseconds\n", duration);
  
  */
 

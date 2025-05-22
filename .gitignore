@@ -43,3 +43,4 @@ build/
 WDL/
 lib/
 .vs/
+.vscode/settings.json

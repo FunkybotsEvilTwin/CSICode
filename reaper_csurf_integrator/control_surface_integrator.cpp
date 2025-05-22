@@ -32,32 +32,22 @@ bool g_surfaceOutDisplay;
 
 bool g_fxParamsWrite;
 
-void GetPropertiesFromTokens(int start, int finish, const vector<string> &tokens, PropertyList &properties)
+void GetPropertiesFromTokens(int start, int finish, const vector<string>& tokens, PropertyList& properties)
 {
-    for (int i = start; i < finish; ++i)
-    {
-        const char *tok = tokens[i].c_str();
-        const char *eq = strstr(tok,"=");
-        if (eq != NULL && strstr(eq+1, "=") == NULL /* legacy behavior, don't allow = in value */)
-        {
-            char tmp[128];
-            int pnlen = (int) (eq-tok) + 1; // +1 is for the null character to be added to tmp
-            if (WDL_NOT_NORMALLY(pnlen > sizeof(tmp))) // if this asserts on a valid property name, increase tmp size
-                pnlen = sizeof(tmp);
-            lstrcpyn_safe(tmp, tok, pnlen);
+    for (int i = start; i < finish; ++i) {
+        std::string_view token = tokens[i];
+        auto eqPos = token.find('=');
 
-            PropertyType prop = PropertyList::prop_from_string(tmp);
-            if (prop != PropertyType_Unknown)
-            {
-                properties.set_prop(prop, eq+1);
-            }
-            else
-            {
-                properties.set_prop(prop, tok); // unknown properties are preserved as Unknown, key=value pair
+        if (eqPos != std::string_view::npos && token.find('=', eqPos + 1) == std::string_view::npos) {
+            std::string key = std::string(token.substr(0, eqPos));
+            std::string value = std::string(token.substr(eqPos + 1));
 
-                if (g_debugLevel >= DEBUG_LEVEL_WARNING) LogToConsole(256, "[WARNING] CSI does not support property named %s\n", tok);
-                
-               // WDL_ASSERT(false);
+            PropertyType prop = PropertyList::prop_from_string(key.c_str());
+            if (prop != PropertyType_Unknown) {
+                properties.set_prop(prop, value.c_str());
+            } else {
+                properties.set_prop(prop, token.data()); // unknown properties are preserved as Unknown, key=value pair
+                if (g_debugLevel >= DEBUG_LEVEL_WARNING) LogToConsole("[WARNING] CSI does not support property named %s\n", key.c_str());
             }
         }
     }
@@ -206,7 +196,7 @@ void TrimLine(string &line)
            line.append(p++,1);
         }
     }
-    if (!line.empty() && g_debugLevel > DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] %s\n", line.c_str());
+    if (!line.empty() && g_debugLevel > DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] %s\n", line.c_str());
 }
 
 void ReplaceAllWith(string &output, const char *charsToReplace, const char *replacement)
@@ -230,11 +220,30 @@ void ReplaceAllWith(string &output, const char *charsToReplace, const char *repl
     }
 }
 
-void GetTokens(vector<string> &tokens, const string &line)
-{
-    istringstream iss(line);
+void GetTokens(vector<string> &tokens, const string &line) {
+    bool insideQuote = false;
     string token;
-    while (iss >> quoted(token))
+    
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        
+        if (c == '"') {
+            insideQuote = !insideQuote;
+            if (!insideQuote) {
+                tokens.push_back(token);
+                token.clear();
+            }
+        } else if (isspace(c) && !insideQuote) {
+            if (!token.empty()) {
+                tokens.push_back(token);
+                token.clear();
+            }
+        } else {
+            token += c;
+        }
+    }
+    
+    if (!token.empty())
         tokens.push_back(token);
 }
 
@@ -244,6 +253,27 @@ void GetTokens(vector<string> &tokens, const string &line, char delimiter)
     string token;
     while (getline(iss, token, delimiter))
         tokens.push_back(token);
+}
+
+vector<vector<string>> GetTokenLines(ifstream &file, string endToken, int &lastProcessedLine) {
+    vector<vector<string>> tokenLines;
+    for (string line; getline(file, line);) {
+        TrimLine(line);
+
+        lastProcessedLine++;
+        
+        if (IsCommentedOrEmpty(line))
+            continue;
+        
+        vector<string> tokens;
+        GetTokens(tokens, line);
+
+        if (tokens[0] == endToken)
+            break;
+        
+        tokenLines.push_back(tokens);
+    }
+    return tokenLines;
 }
 
 int strToHex(string &valueStr)
@@ -425,13 +455,12 @@ static oscpkt::UdpSocket *GetOutputSocketForAddressAndPort(const string &surface
     return NULL;
 }
 
-// files
-static void listFilesOfType(const string &path, vector<string> &results, const string &type)
+static void collectFilesOfType(const string &type, const string &searchPath, vector<string> &results)
 {
-    filesystem::path zonePath { path };
+    filesystem::path zonePath { searchPath };
     
-    if (filesystem::exists(path) && filesystem::is_directory(path))
-        for (auto &file : filesystem::recursive_directory_iterator(path))
+    if (filesystem::exists(searchPath) && filesystem::is_directory(searchPath))
+        for (auto &file : filesystem::recursive_directory_iterator(searchPath))
             if (file.path().extension() == type)
                 results.push_back(file.path().string());
 }
@@ -453,31 +482,12 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
 
     Widget *widget = GetWidgetByName(in_tokens[1]);
     
-    if (widget == NULL)
-    {
-        LogToConsole(2048, "[ERROR] FAILED to ProcessMidiWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
+    if (widget == NULL) {
+        LogToConsole("[ERROR] FAILED to ProcessMidiWidget: no widgets found by name '%s'. Line %s\n", in_tokens[1].c_str(), lineNumber);
         return;
     }
-    vector<vector<string>> tokenLines;
-    
-    for (string line; getline(surfaceTemplateFile, line) ; )
-    {
-        TrimLine(line);
-        
-        lineNumber++;
-        
-        if (line == "" || line[0] == '\r' || line[0] == '/') // ignore comment lines and blank lines
-            continue;
-        
-        vector<string> tokens;
-        GetTokens(tokens, line);
 
-        if (tokens[0] == "WidgetEnd")    // Widget list complete
-            break;
-        
-        tokenLines.push_back(tokens);
-    }
-    
+    vector<vector<string>> tokenLines = GetTokenLines(surfaceTemplateFile, "WidgetEnd", lineNumber);
     if (tokenLines.size() < 1)
         return;
     
@@ -771,27 +781,11 @@ void OSC_ControlSurface::ProcessOSCWidget(int &lineNumber, ifstream &surfaceTemp
     
     if (widget == NULL)
     {
-        LogToConsole(2048, "[ERROR] FAILED to ProcessOSCWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
+        LogToConsole("[ERROR] FAILED to ProcessOSCWidget: widget not found by name %s. Line %s\n", in_tokens[1].c_str(), lineNumber);
         return;
     }
-
-    vector<vector<string>> tokenLines;
-
-    for (string line; getline(surfaceTemplateFile, line) ; )
-    {
-        lineNumber++;
-        
-        if (line == "" || line[0] == '\r' || line[0] == '/') // ignore comment lines and blank lines
-            continue;
-        
-        vector<string> tokens;
-        GetTokens(tokens, line);
-
-        if (tokens[0] == "WidgetEnd")    // Widget list complete
-            break;
-        
-        tokenLines.push_back(tokens);
-    }
+    
+    vector<vector<string>> tokenLines = GetTokenLines(surfaceTemplateFile, "WidgetEnd", lineNumber);
 
     for (int i = 0; i < (int)tokenLines.size(); ++i)
     {
@@ -894,14 +888,14 @@ void Midi_ControlSurface::ProcessMIDIWidgetFile(const string &filePath, Midi_Con
     {
         ifstream file(filePath);
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] ProcessMIDIWidgetFile: %s\n", GetRelativePath(filePath.c_str()));
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] ProcessMIDIWidgetFile: %s\n", GetRelativePath(filePath.c_str()));
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
             
             lineNumber++;
             
-            if (line == "" || line[0] == '\r' || line[0] == '/') // ignore comment lines and blank lines
+            if (IsCommentedOrEmpty(line))
                 continue;
             
             vector<string> tokens;
@@ -919,8 +913,8 @@ void Midi_ControlSurface::ProcessMIDIWidgetFile(const string &filePath, Midi_Con
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "[ERROR] FAILED to ProcessMIDIWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
-        LogToConsole(2048, "Exception: %s\n", e.what());
+        LogToConsole("[ERROR] FAILED to ProcessMIDIWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
+        LogToConsole("Exception: %s\n", e.what());
     }
 }
 
@@ -941,14 +935,14 @@ void OSC_ControlSurface::ProcessOSCWidgetFile(const string &filePath)
     {
         ifstream file(filePath);
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] ProcessOSCWidgetFile: %s\n", filePath.c_str());
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] ProcessOSCWidgetFile: %s\n", GetRelativePath(filePath.c_str()));
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
             
             lineNumber++;
             
-            if (line == "" || line[0] == '\r' || line[0] == '/') // ignore comment lines and blank lines
+            if (IsCommentedOrEmpty(line))
                 continue;
             
             vector<string> tokens;
@@ -966,8 +960,8 @@ void OSC_ControlSurface::ProcessOSCWidgetFile(const string &filePath)
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "[ERROR] FAILED to ProcessOSCWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
-        LogToConsole(2048, "Exception: %s\n", e.what());
+        LogToConsole("[ERROR] FAILED to ProcessOSCWidgetFile in %s, around line %d\n", filePath.c_str(), lineNumber);
+        LogToConsole("Exception: %s\n", e.what());
     }
 }
 
@@ -976,172 +970,192 @@ void OSC_ControlSurface::ProcessOSCWidgetFile(const string &filePath)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 void CSurfIntegrator::InitActionsDictionary()
 {
-    actions_.insert(make_pair("Speak", make_unique<SpeakOSARAMessage>()));
-    actions_.insert(make_pair("SendMIDIMessage", make_unique<SendMIDIMessage>()));
-    actions_.insert(make_pair("SendOSCMessage", make_unique<SendOSCMessage>()));
-    actions_.insert(make_pair("SaveProject", make_unique<SaveProject>()));
-    actions_.insert(make_pair("Undo", make_unique<Undo>()));
-    actions_.insert(make_pair("Redo", make_unique<Redo>()));
-    actions_.insert(make_pair("TrackAutoMode", make_unique<TrackAutoMode>()));
-    actions_.insert(make_pair("GlobalAutoMode", make_unique<GlobalAutoMode>()));
-    actions_.insert(make_pair("TrackAutoModeDisplay", make_unique<TrackAutoModeDisplay>()));
-    actions_.insert(make_pair("GlobalAutoModeDisplay", make_unique<GlobalAutoModeDisplay>()));
-    actions_.insert(make_pair("CycleTrackInputMonitor", make_unique<CycleTrackInputMonitor>()));
-    actions_.insert(make_pair("TrackInputMonitorDisplay", make_unique<TrackInputMonitorDisplay>()));
-    actions_.insert(make_pair("MCUTimeDisplay", make_unique<MCUTimeDisplay>()));
-    actions_.insert(make_pair("OSCTimeDisplay", make_unique<OSCTimeDisplay>()));
-    actions_.insert(make_pair("NoAction", make_unique<NoAction>()));
-    actions_.insert(make_pair("Reaper", make_unique<ReaperAction>()));
-    actions_.insert(make_pair("FixedTextDisplay", make_unique<FixedTextDisplay>()));
-    actions_.insert(make_pair("FixedRGBColorDisplay", make_unique<FixedRGBColorDisplay>()));
-    actions_.insert(make_pair("MoveEditCursor", make_unique<MoveCursor>()));
-    actions_.insert(make_pair("Rewind", make_unique<Rewind>()));
-    actions_.insert(make_pair("FastForward", make_unique<FastForward>()));
-    actions_.insert(make_pair("Play", make_unique<Play>()));
-    actions_.insert(make_pair("Stop", make_unique<Stop>()));
-    actions_.insert(make_pair("Record", make_unique<Record>()));
-    actions_.insert(make_pair("CycleTimeline", make_unique<CycleTimeline>()));
-    actions_.insert(make_pair("ToggleSynchPageBanking", make_unique<ToggleSynchPageBanking>()));
-    actions_.insert(make_pair("ToggleFollowMCP", make_unique<ToggleFollowMCP>()));
-    actions_.insert(make_pair("ToggleScrollLink", make_unique<ToggleScrollLink>()));
-    actions_.insert(make_pair("ToggleRestrictTextLength", make_unique<ToggleRestrictTextLength>()));
-    actions_.insert(make_pair("CSINameDisplay", make_unique<CSINameDisplay>()));
-    actions_.insert(make_pair("CSIVersionDisplay", make_unique<CSIVersionDisplay>()));
-    actions_.insert(make_pair("GlobalModeDisplay", make_unique<GlobalModeDisplay>()));
-    actions_.insert(make_pair("CycleTimeDisplayModes", make_unique<CycleTimeDisplayModes>()));
-    actions_.insert(make_pair("NextPage", make_unique<GoNextPage>()));
-    actions_.insert(make_pair("GoPage", make_unique<GoPage>()));
-    actions_.insert(make_pair("PageNameDisplay", make_unique<PageNameDisplay>()));
-    actions_.insert(make_pair("GoHome", make_unique<GoHome>()));
-    actions_.insert(make_pair("AllSurfacesGoHome", make_unique<AllSurfacesGoHome>()));
-    actions_.insert(make_pair("GoSubZone", make_unique<GoSubZone>()));
-    actions_.insert(make_pair("LeaveSubZone", make_unique<LeaveSubZone>()));
-    actions_.insert(make_pair("SetXTouchDisplayColors", make_unique<SetXTouchDisplayColors>()));
-    actions_.insert(make_pair("RestoreXTouchDisplayColors", make_unique<RestoreXTouchDisplayColors>()));
-    actions_.insert(make_pair("GoFXSlot", make_unique<GoFXSlot>()));
-    actions_.insert(make_pair("ShowFXSlot", make_unique<ShowFXSlot>()));
-    actions_.insert(make_pair("HideFXSlot", make_unique<HideFXSlot>()));
-    actions_.insert(make_pair("ToggleUseLocalModifiers", make_unique<ToggleUseLocalModifiers>()));
-    actions_.insert(make_pair("ToggleUseLocalFXSlot", make_unique<ToggleUseLocalFXSlot>()));
-    actions_.insert(make_pair("SetLatchTime", make_unique<SetLatchTime>()));
-    actions_.insert(make_pair("SetHoldTime", make_unique<SetHoldTime>()));
-    actions_.insert(make_pair("ToggleEnableFocusedFXMapping", make_unique<ToggleEnableFocusedFXMapping>()));
-    actions_.insert(make_pair("DisableFocusedFXMapping", make_unique<DisableFocusedFXMapping>()));
-    actions_.insert(make_pair("ToggleEnableLastTouchedFXParamMapping", make_unique<ToggleEnableLastTouchedFXParamMapping>()));
-    actions_.insert(make_pair("DisableLastTouchedFXParamMapping", make_unique<DisableLastTouchedFXParamMapping>()));
-    actions_.insert(make_pair("LearnFocusedFX", make_unique<LearnFocusedFX>()));
-    actions_.insert(make_pair("GoZone", make_unique<GoZone>()));
-    actions_.insert(make_pair("ClearLastTouchedFXParam", make_unique<ClearLastTouchedFXParam>()));
-    actions_.insert(make_pair("ClearFocusedFX", make_unique<ClearFocusedFX>()));
-    actions_.insert(make_pair("ClearSelectedTrackFX", make_unique<ClearSelectedTrackFX>()));
-    actions_.insert(make_pair("ClearFXSlot", make_unique<ClearFXSlot>()));
-    actions_.insert(make_pair("Bank", make_unique<Bank>()));
-    actions_.insert(make_pair("Shift", make_unique<SetShift>()));
-    actions_.insert(make_pair("Option", make_unique<SetOption>()));
-    actions_.insert(make_pair("Control", make_unique<SetControl>()));
-    actions_.insert(make_pair("Alt", make_unique<SetAlt>()));
-    actions_.insert(make_pair("Flip", make_unique<SetFlip>()));
-    actions_.insert(make_pair("Global", make_unique<SetGlobal>()));
-    actions_.insert(make_pair("Marker", make_unique<SetMarker>()));
-    actions_.insert(make_pair("Nudge", make_unique<SetNudge>()));
-    actions_.insert(make_pair("Zoom", make_unique<SetZoom>()));
-    actions_.insert(make_pair("Scrub", make_unique<SetScrub>()));
-    actions_.insert(make_pair("ClearModifier", make_unique<ClearModifier>()));
-    actions_.insert(make_pair("ClearModifiers", make_unique<ClearModifiers>()));
-    actions_.insert(make_pair("ToggleChannel", make_unique<SetToggleChannel>()));
-    actions_.insert(make_pair("CycleTrackAutoMode", make_unique<CycleTrackAutoMode>()));
-    actions_.insert(make_pair("TrackVolume", make_unique<TrackVolume>()));
-    actions_.insert(make_pair("SoftTakeover7BitTrackVolume", make_unique<SoftTakeover7BitTrackVolume>()));
-    actions_.insert(make_pair("SoftTakeover14BitTrackVolume", make_unique<SoftTakeover14BitTrackVolume>()));
-    actions_.insert(make_pair("TrackVolumeDB", make_unique<TrackVolumeDB>()));
-    actions_.insert(make_pair("TrackToggleVCASpill", make_unique<TrackToggleVCASpill>()));
-    actions_.insert(make_pair("TrackVCALeaderDisplay", make_unique<TrackVCALeaderDisplay>()));
-    actions_.insert(make_pair("TrackToggleFolderSpill", make_unique<TrackToggleFolderSpill>()));
-    actions_.insert(make_pair("TrackFolderParentDisplay", make_unique<TrackFolderParentDisplay>()));
-    actions_.insert(make_pair("ToggleFolderView", make_unique<ToggleFolderView>()));
-    actions_.insert(make_pair("TrackEnterFolder", make_unique<TrackEnterFolder>()));
-    actions_.insert(make_pair("ExitCurrentFolder", make_unique<ExitCurrentFolder>()));
-    actions_.insert(make_pair("TrackSelect", make_unique<TrackSelect>()));
-    actions_.insert(make_pair("TrackUniqueSelect", make_unique<TrackUniqueSelect>()));
-    actions_.insert(make_pair("TrackRangeSelect", make_unique<TrackRangeSelect>()));
-    actions_.insert(make_pair("TrackRecordArm", make_unique<TrackRecordArm>()));
-    actions_.insert(make_pair("TrackRecordArmDisplay", make_unique<TrackRecordArmDisplay>()));
-    actions_.insert(make_pair("TrackMute", make_unique<TrackMute>()));
-    actions_.insert(make_pair("TrackSolo", make_unique<TrackSolo>()));
-    actions_.insert(make_pair("ClearAllSolo", make_unique<ClearAllSolo>()));
-    actions_.insert(make_pair("TrackInvertPolarity", make_unique<TrackInvertPolarity>()));
-    actions_.insert(make_pair("TrackInvertPolarityDisplay", make_unique<TrackInvertPolarityDisplay>()));
-    actions_.insert(make_pair("TrackPan", make_unique<TrackPan>()));
-    actions_.insert(make_pair("TrackPanPercent", make_unique<TrackPanPercent>()));
-    actions_.insert(make_pair("TrackPanWidth", make_unique<TrackPanWidth>()));
-    actions_.insert(make_pair("TrackPanWidthPercent", make_unique<TrackPanWidthPercent>()));
-    actions_.insert(make_pair("TrackPanL", make_unique<TrackPanL>()));
-    actions_.insert(make_pair("TrackPanLPercent", make_unique<TrackPanLPercent>()));
-    actions_.insert(make_pair("TrackPanR", make_unique<TrackPanR>()));
-    actions_.insert(make_pair("TrackPanRPercent", make_unique<TrackPanRPercent>()));
-    actions_.insert(make_pair("TrackPanAutoLeft", make_unique<TrackPanAutoLeft>()));
-    actions_.insert(make_pair("TrackPanAutoRight", make_unique<TrackPanAutoRight>()));
-    actions_.insert(make_pair("TrackNameDisplay", make_unique<TrackNameDisplay>()));
-    actions_.insert(make_pair("TrackNumberDisplay", make_unique<TrackNumberDisplay>()));
-    actions_.insert(make_pair("TrackRecordInputDisplay", make_unique<TrackRecordInputDisplay>()));
-    actions_.insert(make_pair("TrackVolumeDisplay", make_unique<TrackVolumeDisplay>()));
-    actions_.insert(make_pair("TrackPanDisplay", make_unique<TrackPanDisplay>()));
-    actions_.insert(make_pair("TrackPanWidthDisplay", make_unique<TrackPanWidthDisplay>()));
-    actions_.insert(make_pair("TrackPanLeftDisplay", make_unique<TrackPanLeftDisplay>()));
-    actions_.insert(make_pair("TrackPanRightDisplay", make_unique<TrackPanRightDisplay>()));
-    actions_.insert(make_pair("TrackPanAutoLeftDisplay", make_unique<TrackPanAutoLeftDisplay>()));
-    actions_.insert(make_pair("TrackPanAutoRightDisplay", make_unique<TrackPanAutoRightDisplay>()));
-    actions_.insert(make_pair("TrackOutputMeter", make_unique<TrackOutputMeter>()));
-    actions_.insert(make_pair("TrackOutputMeterAverageLR", make_unique<TrackOutputMeterAverageLR>()));
-    actions_.insert(make_pair("TrackVolumeWithMeterAverageLR", make_unique<TrackVolumeWithMeterAverageLR>()));
-    actions_.insert(make_pair("TrackOutputMeterMaxPeakLR", make_unique<TrackOutputMeterMaxPeakLR>()));
-    actions_.insert(make_pair("TrackVolumeWithMeterMaxPeakLR", make_unique<TrackVolumeWithMeterMaxPeakLR>()));
-    actions_.insert(make_pair("LastTouchedFXParam", make_unique<LastTouchedFXParam>()));
-    actions_.insert(make_pair("FXParam", make_unique<FXParam>()));
-    actions_.insert(make_pair("JSFXParam", make_unique<JSFXParam>()));
-    actions_.insert(make_pair("TCPFXParam", make_unique<TCPFXParam>()));
-    actions_.insert(make_pair("ToggleFXBypass", make_unique<ToggleFXBypass>()));
-    actions_.insert(make_pair("FXBypassDisplay", make_unique<FXBypassDisplay>()));
-    actions_.insert(make_pair("ToggleFXOffline", make_unique<ToggleFXOffline>()));
-    actions_.insert(make_pair("FXOfflineDisplay", make_unique<FXOfflineDisplay>()));
-    actions_.insert(make_pair("FXNameDisplay", make_unique<FXNameDisplay>()));
-    actions_.insert(make_pair("FXMenuNameDisplay", make_unique<FXMenuNameDisplay>()));
-    actions_.insert(make_pair("SpeakFXMenuName", make_unique<SpeakFXMenuName>()));
-    actions_.insert(make_pair("FXParamNameDisplay", make_unique<FXParamNameDisplay>()));
-    actions_.insert(make_pair("TCPFXParamNameDisplay", make_unique<TCPFXParamNameDisplay>()));
-    actions_.insert(make_pair("FXParamValueDisplay", make_unique<FXParamValueDisplay>()));
-    actions_.insert(make_pair("TCPFXParamValueDisplay", make_unique<TCPFXParamValueDisplay>()));
-    actions_.insert(make_pair("LastTouchedFXParamNameDisplay", make_unique<LastTouchedFXParamNameDisplay>()));
-    actions_.insert(make_pair("LastTouchedFXParamValueDisplay", make_unique<LastTouchedFXParamValueDisplay>()));
-    actions_.insert(make_pair("FXGainReductionMeter", make_unique<FXGainReductionMeter>()));
-    actions_.insert(make_pair("TrackSendVolume", make_unique<TrackSendVolume>()));
-    actions_.insert(make_pair("TrackSendVolumeDB", make_unique<TrackSendVolumeDB>()));
-    actions_.insert(make_pair("TrackSendPan", make_unique<TrackSendPan>()));
-    actions_.insert(make_pair("TrackSendPanPercent", make_unique<TrackSendPanPercent>()));
-    actions_.insert(make_pair("TrackSendMute", make_unique<TrackSendMute>()));
-    actions_.insert(make_pair("TrackSendInvertPolarity", make_unique<TrackSendInvertPolarity>()));
-    actions_.insert(make_pair("TrackSendStereoMonoToggle", make_unique<TrackSendStereoMonoToggle>()));
-    actions_.insert(make_pair("TrackSendPrePost", make_unique<TrackSendPrePost>()));
-    actions_.insert(make_pair("TrackSendNameDisplay", make_unique<TrackSendNameDisplay>()));
-    actions_.insert(make_pair("SpeakTrackSendDestination", make_unique<SpeakTrackSendDestination>()));
-    actions_.insert(make_pair("TrackSendVolumeDisplay", make_unique<TrackSendVolumeDisplay>()));
-    actions_.insert(make_pair("TrackSendPanDisplay", make_unique<TrackSendPanDisplay>()));
-    actions_.insert(make_pair("TrackSendStereoMonoDisplay", make_unique<TrackSendStereoMonoDisplay>()));
-    actions_.insert(make_pair("TrackSendPrePostDisplay", make_unique<TrackSendPrePostDisplay>()));
-    actions_.insert(make_pair("TrackReceiveVolume", make_unique<TrackReceiveVolume>()));
-    actions_.insert(make_pair("TrackReceiveVolumeDB", make_unique<TrackReceiveVolumeDB>()));
-    actions_.insert(make_pair("TrackReceivePan", make_unique<TrackReceivePan>()));
-    actions_.insert(make_pair("TrackReceivePanPercent", make_unique<TrackReceivePanPercent>()));
-    actions_.insert(make_pair("TrackReceiveMute", make_unique<TrackReceiveMute>()));
-    actions_.insert(make_pair("TrackReceiveInvertPolarity", make_unique<TrackReceiveInvertPolarity>()));
-    actions_.insert(make_pair("TrackReceiveStereoMonoToggle", make_unique<TrackReceiveStereoMonoToggle>()));
-    actions_.insert(make_pair("TrackReceivePrePost", make_unique<TrackReceivePrePost>()));
-    actions_.insert(make_pair("TrackReceiveNameDisplay", make_unique<TrackReceiveNameDisplay>()));
-    actions_.insert(make_pair("SpeakTrackReceiveSource", make_unique<SpeakTrackReceiveSource>()));
-    actions_.insert(make_pair("TrackReceiveVolumeDisplay", make_unique<TrackReceiveVolumeDisplay>()));
-    actions_.insert(make_pair("TrackReceivePanDisplay", make_unique<TrackReceivePanDisplay>()));
-    actions_.insert(make_pair("TrackReceiveStereoMonoDisplay", make_unique<TrackReceiveStereoMonoDisplay>()));
-    actions_.insert(make_pair("TrackReceivePrePostDisplay", make_unique<TrackReceivePrePostDisplay>()));
+//// Transport and Timeline ////
+actions_.insert(make_pair("MoveEditCursor", make_unique<MoveCursor>()));
+actions_.insert(make_pair("Rewind", make_unique<Rewind>()));
+actions_.insert(make_pair("FastForward", make_unique<FastForward>()));
+actions_.insert(make_pair("Play", make_unique<Play>()));
+actions_.insert(make_pair("Stop", make_unique<Stop>()));
+actions_.insert(make_pair("Record", make_unique<Record>()));
+actions_.insert(make_pair("CycleTimeline", make_unique<CycleTimeline>()));
+actions_.insert(make_pair("MCUTimeDisplay", make_unique<MCUTimeDisplay>()));
+actions_.insert(make_pair("OSCTimeDisplay", make_unique<OSCTimeDisplay>()));
+actions_.insert(make_pair("CycleTimeDisplayModes", make_unique<CycleTimeDisplayModes>()));
+//// Tracks ////
+actions_.insert(make_pair("TrackVolume", make_unique<TrackVolume>()));
+actions_.insert(make_pair("SoftTakeover7BitTrackVolume", make_unique<SoftTakeover7BitTrackVolume>()));
+actions_.insert(make_pair("SoftTakeover14BitTrackVolume", make_unique<SoftTakeover14BitTrackVolume>()));
+actions_.insert(make_pair("TrackPanAutoLeft", make_unique<TrackPanAutoLeft>()));
+actions_.insert(make_pair("TrackPanAutoRight", make_unique<TrackPanAutoRight>()));
+actions_.insert(make_pair("TrackPan", make_unique<TrackPan>()));
+actions_.insert(make_pair("TrackPanWidth", make_unique<TrackPanWidth>()));
+actions_.insert(make_pair("TrackPanL", make_unique<TrackPanL>()));
+actions_.insert(make_pair("TrackPanR", make_unique<TrackPanR>()));
+actions_.insert(make_pair("TrackSelect", make_unique<TrackSelect>()));
+actions_.insert(make_pair("TrackUniqueSelect", make_unique<TrackUniqueSelect>()));
+actions_.insert(make_pair("TrackRangeSelect", make_unique<TrackRangeSelect>()));
+actions_.insert(make_pair("TrackSolo", make_unique<TrackSolo>()));
+actions_.insert(make_pair("TrackMute", make_unique<TrackMute>()));
+actions_.insert(make_pair("TrackRecordArm", make_unique<TrackRecordArm>()));
+actions_.insert(make_pair("TrackRecordArmDisplay", make_unique<TrackRecordArmDisplay>()));
+actions_.insert(make_pair("TrackInvertPolarity", make_unique<TrackInvertPolarity>()));
+actions_.insert(make_pair("TrackInvertPolarityDisplay", make_unique<TrackInvertPolarityDisplay>()));
+actions_.insert(make_pair("CycleTrackInputMonitor", make_unique<CycleTrackInputMonitor>()));
+actions_.insert(make_pair("TrackInputMonitorDisplay", make_unique<TrackInputMonitorDisplay>()));
+actions_.insert(make_pair("TrackNameDisplay", make_unique<TrackNameDisplay>()));
+actions_.insert(make_pair("TrackNumberDisplay", make_unique<TrackNumberDisplay>()));
+actions_.insert(make_pair("TrackVolumeDisplay", make_unique<TrackVolumeDisplay>()));
+actions_.insert(make_pair("TrackPanAutoLeftDisplay", make_unique<TrackPanAutoLeftDisplay>()));
+actions_.insert(make_pair("TrackPanAutoRightDisplay", make_unique<TrackPanAutoRightDisplay>()));
+actions_.insert(make_pair("TrackPanDisplay", make_unique<TrackPanDisplay>()));
+actions_.insert(make_pair("TrackPanWidthDisplay", make_unique<TrackPanWidthDisplay>()));
+actions_.insert(make_pair("TrackPanLeftDisplay", make_unique<TrackPanLeftDisplay>()));
+actions_.insert(make_pair("TrackPanRightDisplay", make_unique<TrackPanRightDisplay>()));
+actions_.insert(make_pair("TrackOutputMeter", make_unique<TrackOutputMeter>()));
+actions_.insert(make_pair("TrackOutputMeterAverageLR", make_unique<TrackOutputMeterAverageLR>()));
+actions_.insert(make_pair("TrackOutputMeterMaxPeakLR", make_unique<TrackOutputMeterMaxPeakLR>()));
+actions_.insert(make_pair("TrackRecordInputDisplay", make_unique<TrackRecordInputDisplay>()));
+actions_.insert(make_pair("TrackVolumeDB", make_unique<TrackVolumeDB>()));
+actions_.insert(make_pair("TrackPanPercent", make_unique<TrackPanPercent>()));
+actions_.insert(make_pair("TrackPanWidthPercent", make_unique<TrackPanWidthPercent>()));
+actions_.insert(make_pair("TrackPanLPercent", make_unique<TrackPanLPercent>()));
+actions_.insert(make_pair("TrackPanRPercent", make_unique<TrackPanRPercent>()));
+actions_.insert(make_pair("TrackVolumeWithMeterAverageLR", make_unique<TrackVolumeWithMeterAverageLR>()));
+actions_.insert(make_pair("TrackVolumeWithMeterMaxPeakLR", make_unique<TrackVolumeWithMeterMaxPeakLR>()));
+//// Track Sends ////
+actions_.insert(make_pair("TrackSendNameDisplay", make_unique<TrackSendNameDisplay>()));
+actions_.insert(make_pair("TrackSendVolume", make_unique<TrackSendVolume>()));
+actions_.insert(make_pair("TrackSendVolumeDisplay", make_unique<TrackSendVolumeDisplay>()));
+actions_.insert(make_pair("TrackSendPan", make_unique<TrackSendPan>()));
+actions_.insert(make_pair("TrackSendPanDisplay", make_unique<TrackSendPanDisplay>()));
+actions_.insert(make_pair("TrackSendPrePost", make_unique<TrackSendPrePost>()));
+actions_.insert(make_pair("TrackSendPrePostDisplay", make_unique<TrackSendPrePostDisplay>()));
+actions_.insert(make_pair("TrackSendMute", make_unique<TrackSendMute>()));
+actions_.insert(make_pair("TrackSendStereoMonoDisplay", make_unique<TrackSendStereoMonoDisplay>()));
+actions_.insert(make_pair("TrackSendStereoMonoToggle", make_unique<TrackSendStereoMonoToggle>()));
+actions_.insert(make_pair("TrackSendInvertPolarity", make_unique<TrackSendInvertPolarity>()));
+actions_.insert(make_pair("TrackSendVolumeDB", make_unique<TrackSendVolumeDB>()));
+actions_.insert(make_pair("TrackSendPanPercent", make_unique<TrackSendPanPercent>()));
+//// Track Receives ////
+actions_.insert(make_pair("TrackReceiveNameDisplay", make_unique<TrackReceiveNameDisplay>()));
+actions_.insert(make_pair("TrackReceiveVolume", make_unique<TrackReceiveVolume>()));
+actions_.insert(make_pair("TrackReceiveVolumeDisplay", make_unique<TrackReceiveVolumeDisplay>()));
+actions_.insert(make_pair("TrackReceivePan", make_unique<TrackReceivePan>()));
+actions_.insert(make_pair("TrackReceivePanDisplay", make_unique<TrackReceivePanDisplay>()));
+actions_.insert(make_pair("TrackReceivePrePost", make_unique<TrackReceivePrePost>()));
+actions_.insert(make_pair("TrackReceivePrePostDisplay", make_unique<TrackReceivePrePostDisplay>()));
+actions_.insert(make_pair("TrackReceiveMute", make_unique<TrackReceiveMute>()));
+actions_.insert(make_pair("TrackReceiveStereoMonoToggle", make_unique<TrackReceiveStereoMonoToggle>()));
+actions_.insert(make_pair("TrackReceiveStereoMonoDisplay", make_unique<TrackReceiveStereoMonoDisplay>()));
+actions_.insert(make_pair("TrackReceiveInvertPolarity", make_unique<TrackReceiveInvertPolarity>()));
+actions_.insert(make_pair("TrackReceiveVolumeDB", make_unique<TrackReceiveVolumeDB>()));
+actions_.insert(make_pair("TrackReceivePanPercent", make_unique<TrackReceivePanPercent>()));
+//// FX ////
+actions_.insert(make_pair("FXParam", make_unique<FXParam>()));
+actions_.insert(make_pair("FXNameDisplay", make_unique<FXNameDisplay>()));
+actions_.insert(make_pair("FXParamNameDisplay", make_unique<FXParamNameDisplay>()));
+actions_.insert(make_pair("FXParamValueDisplay", make_unique<FXParamValueDisplay>()));
+actions_.insert(make_pair("FXMenuNameDisplay", make_unique<FXMenuNameDisplay>()));
+actions_.insert(make_pair("ToggleEnableFocusedFXMapping", make_unique<ToggleEnableFocusedFXMapping>()));
+actions_.insert(make_pair("ToggleFXBypass", make_unique<ToggleFXBypass>()));
+actions_.insert(make_pair("FXBypassDisplay", make_unique<FXBypassDisplay>()));
+actions_.insert(make_pair("ToggleFXOffline", make_unique<ToggleFXOffline>()));
+actions_.insert(make_pair("FXOfflineDisplay", make_unique<FXOfflineDisplay>()));
+actions_.insert(make_pair("FXGainReductionMeter", make_unique<FXGainReductionMeter>()));
+actions_.insert(make_pair("GoFXSlot", make_unique<GoFXSlot>()));
+actions_.insert(make_pair("ShowFXSlot", make_unique<ShowFXSlot>()));
+actions_.insert(make_pair("HideFXSlot", make_unique<HideFXSlot>()));
+actions_.insert(make_pair("TCPFXParam", make_unique<TCPFXParam>()));
+actions_.insert(make_pair("TCPFXParamNameDisplay", make_unique<TCPFXParamNameDisplay>()));
+actions_.insert(make_pair("TCPFXParamValueDisplay", make_unique<TCPFXParamValueDisplay>()));
+actions_.insert(make_pair("JSFXParam", make_unique<JSFXParam>()));
+
+actions_.insert(make_pair("LearnFocusedFX", make_unique<LearnFocusedFX>()));
+actions_.insert(make_pair("LastTouchedFXParam", make_unique<LastTouchedFXParam>()));
+actions_.insert(make_pair("LastTouchedFXParamNameDisplay", make_unique<LastTouchedFXParamNameDisplay>()));
+actions_.insert(make_pair("LastTouchedFXParamValueDisplay", make_unique<LastTouchedFXParamValueDisplay>()));
+actions_.insert(make_pair("ClearLastTouchedFXParam", make_unique<ClearLastTouchedFXParam>()));
+actions_.insert(make_pair("DisableFocusedFXMapping", make_unique<DisableFocusedFXMapping>()));
+actions_.insert(make_pair("DisableLastTouchedFXParamMapping", make_unique<DisableLastTouchedFXParamMapping>()));
+actions_.insert(make_pair("ToggleEnableLastTouchedFXParamMapping", make_unique<ToggleEnableLastTouchedFXParamMapping>()));
+actions_.insert(make_pair("ToggleUseLocalFXSlot", make_unique<ToggleUseLocalFXSlot>()));
+//// Navigation ////
+actions_.insert(make_pair("Bank", make_unique<Bank>()));
+actions_.insert(make_pair("GoHome", make_unique<GoHome>()));
+actions_.insert(make_pair("AllSurfacesGoHome", make_unique<AllSurfacesGoHome>()));
+actions_.insert(make_pair("GoZone", make_unique<GoZone>()));
+actions_.insert(make_pair("GoSubZone", make_unique<GoSubZone>()));
+actions_.insert(make_pair("LeaveSubZone", make_unique<LeaveSubZone>()));
+actions_.insert(make_pair("GoPage", make_unique<GoPage>()));
+actions_.insert(make_pair("NextPage", make_unique<GoNextPage>()));
+actions_.insert(make_pair("PageNameDisplay", make_unique<PageNameDisplay>()));
+actions_.insert(make_pair("ToggleSynchPageBanking", make_unique<ToggleSynchPageBanking>()));
+actions_.insert(make_pair("ToggleScrollLink", make_unique<ToggleScrollLink>()));
+actions_.insert(make_pair("ToggleFollowMCP", make_unique<ToggleFollowMCP>()));
+actions_.insert(make_pair("ClearFXSlot", make_unique<ClearFXSlot>()));
+actions_.insert(make_pair("ClearFocusedFX", make_unique<ClearFocusedFX>()));
+actions_.insert(make_pair("ClearSelectedTrackFX", make_unique<ClearSelectedTrackFX>()));
+
+actions_.insert(make_pair("ToggleFolderView", make_unique<ToggleFolderView>()));
+actions_.insert(make_pair("TrackEnterFolder", make_unique<TrackEnterFolder>()));
+actions_.insert(make_pair("ExitCurrentFolder", make_unique<ExitCurrentFolder>()));
+
+//// Project Actions ////
+actions_.insert(make_pair("SaveProject", make_unique<SaveProject>()));
+actions_.insert(make_pair("Undo", make_unique<Undo>()));
+actions_.insert(make_pair("Redo", make_unique<Redo>()));
+//// VCA and Folder ////
+actions_.insert(make_pair("TrackToggleVCASpill", make_unique<TrackToggleVCASpill>()));
+actions_.insert(make_pair("TrackVCALeaderDisplay", make_unique<TrackVCALeaderDisplay>()));
+actions_.insert(make_pair("TrackToggleFolderSpill", make_unique<TrackToggleFolderSpill>()));
+actions_.insert(make_pair("TrackFolderParentDisplay", make_unique<TrackFolderParentDisplay>()));
+//// Automation ////
+actions_.insert(make_pair("TrackAutoMode", make_unique<TrackAutoMode>()));
+actions_.insert(make_pair("TrackAutoModeDisplay", make_unique<TrackAutoModeDisplay>()));
+actions_.insert(make_pair("GlobalAutoMode", make_unique<GlobalAutoMode>()));
+actions_.insert(make_pair("GlobalAutoModeDisplay", make_unique<GlobalAutoModeDisplay>()));
+actions_.insert(make_pair("CycleTrackAutoMode", make_unique<CycleTrackAutoMode>()));
+//// Other ////
+actions_.insert(make_pair("Reaper", make_unique<ReaperAction>()));
+actions_.insert(make_pair("NoAction", make_unique<NoAction>()));
+actions_.insert(make_pair("InvalidAction", make_unique<InvalidAction>()));
+actions_.insert(make_pair("FixedTextDisplay", make_unique<FixedTextDisplay>()));
+actions_.insert(make_pair("FixedRGBColorDisplay", make_unique<FixedRGBColorDisplay>()));
+actions_.insert(make_pair("ClearAllSolo", make_unique<ClearAllSolo>()));
+actions_.insert(make_pair("ToggleChannel", make_unique<SetToggleChannel>()));
+actions_.insert(make_pair("SendMIDIMessage", make_unique<SendMIDIMessage>()));
+actions_.insert(make_pair("SendOSCMessage", make_unique<SendOSCMessage>()));
+actions_.insert(make_pair("SetXTouchDisplayColors", make_unique<SetXTouchDisplayColors>()));
+actions_.insert(make_pair("RestoreXTouchDisplayColors", make_unique<RestoreXTouchDisplayColors>()));
+actions_.insert(make_pair("Speak", make_unique<SpeakOSARAMessage>()));
+actions_.insert(make_pair("SpeakFXMenuName", make_unique<SpeakFXMenuName>()));
+actions_.insert(make_pair("SpeakTrackSendDestination", make_unique<SpeakTrackSendDestination>()));
+actions_.insert(make_pair("SpeakTrackReceiveSource", make_unique<SpeakTrackReceiveSource>()));
+actions_.insert(make_pair("ToggleRestrictTextLength", make_unique<ToggleRestrictTextLength>()));
+actions_.insert(make_pair("ToggleUseLocalModifiers", make_unique<ToggleUseLocalModifiers>()));
+actions_.insert(make_pair("CSINameDisplay", make_unique<CSINameDisplay>()));
+actions_.insert(make_pair("CSIVersionDisplay", make_unique<CSIVersionDisplay>()));
+//// Modifiers ////
+actions_.insert(make_pair("Shift", make_unique<SetShift>()));
+actions_.insert(make_pair("Option", make_unique<SetOption>()));
+actions_.insert(make_pair("Control", make_unique<SetControl>()));
+actions_.insert(make_pair("Alt", make_unique<SetAlt>()));
+actions_.insert(make_pair("Flip", make_unique<SetFlip>()));
+actions_.insert(make_pair("Marker", make_unique<SetMarker>()));
+actions_.insert(make_pair("Nudge", make_unique<SetNudge>()));
+actions_.insert(make_pair("Scrub", make_unique<SetScrub>()));
+actions_.insert(make_pair("Zoom", make_unique<SetZoom>()));
+actions_.insert(make_pair("Global", make_unique<SetGlobal>()));
+actions_.insert(make_pair("GlobalModeDisplay", make_unique<GlobalModeDisplay>()));
+actions_.insert(make_pair("ClearModifier", make_unique<ClearModifier>()));
+actions_.insert(make_pair("ClearModifiers", make_unique<ClearModifiers>()));
+// Invert, Hold, DoublePress - are pseudo modifiers
+//// Global settings ////
+actions_.insert(make_pair("EnableOSD", make_unique<EnableOSD>()));
+actions_.insert(make_pair("SetOSDTime", make_unique<SetOSDTime>()));
+actions_.insert(make_pair("SetLatchTime", make_unique<SetLatchTime>()));
+actions_.insert(make_pair("SetHoldTime", make_unique<SetHoldTime>()));
+actions_.insert(make_pair("SetDoublePressTime", make_unique<SetDoublePressTime>()));
 }
 
 void CSurfIntegrator::Init()
@@ -1156,10 +1170,7 @@ void CSurfIntegrator::Init()
     
     if ( ! filesystem::exists(CSIFolderPath))
     {
-        char tmp[MEDBUF];
-        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), CSIFolderPath.c_str());
-        MessageBox(g_hwnd, tmp, __LOCALIZE("Missing CSI Folder","csi_mbox"), MB_OK);
-
+        LogToConsole("[ERROR] Missing CSI Folder. Please check your installation, cannot find %s\n", CSIFolderPath.c_str());
         return;
     }
     
@@ -1167,10 +1178,7 @@ void CSurfIntegrator::Init()
     
     if ( ! filesystem::exists(iniFilePath))
     {
-        char tmp[MEDBUF];
-        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), iniFilePath.c_str());
-        MessageBox(g_hwnd, tmp, __LOCALIZE("Missing CSI.ini","csi_mbox"), MB_OK);
-
+        LogToConsole("[ERROR] Missing CSI.ini. Please check your installation, cannot find %s\n", iniFilePath.c_str());
         return;
     }
 
@@ -1195,12 +1203,9 @@ void CSurfIntegrator::Init()
                 const char *versionProp = pList.get_prop(PropertyType_Version);
                 if (versionProp)
                 {
-                    if (strcmp(versionProp, s_MajorVersionToken))
-                    {
-                        char tmp[MEDBUF];
-                        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Version mismatch -- Your CSI.ini file is not %s.","csi_mbox"), s_MajorVersionToken);
-                        MessageBox(g_hwnd, tmp, __LOCALIZE("CSI.ini version mismatch","csi_mbox"), MB_OK);
-
+                    if (!IsSameString(versionProp, s_MajorVersionToken)) {
+                        LogToConsole("[ERROR] CSI.ini version mismatch. -- Your CSI.ini file is not %s.\n", s_MajorVersionToken);
+                        //FIXME: so what? make backup and generate new, or at least prompt to confirm
                         iniFile.close();
                         return;
                     }
@@ -1212,23 +1217,20 @@ void CSurfIntegrator::Init()
                 }
                 else
                 {
-                    char tmp[MEDBUF];
-                    snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Cannot read version %s.","csi_mbox"), "");
-                    MessageBox(g_hwnd, tmp, __LOCALIZE("CSI.ini no version","csi_mbox"), MB_OK);
-
+                    LogToConsole("[ERROR] CSI.ini has no version.\n");
+                    //FIXME: so what? generate new, or at least prompt to confirm
                     iniFile.close();
                     return;
                 }
             }
             
-            if (line == "" || line[0] == '\r' || line[0] == '/') // ignore comment lines and blank lines
+            if (IsCommentedOrEmpty(line))
                 continue;
             
             vector<string> tokens;
             GetTokens(tokens, line.c_str());
             
-            if (tokens.size() > 0) // ignore comment lines and blank lines
-            {
+            if (tokens.size() > 0) {
                 PropertyList pList;
                 GetPropertiesFromTokens(0, (int) tokens.size(), tokens, pList);
                 
@@ -1240,7 +1242,7 @@ void CSurfIntegrator::Init()
                         {
                             int channelCount = atoi(channelCountProp);
                             
-                            if ( ! strcmp(typeProp, s_MidiSurfaceToken) && tokens.size() == 7)
+                            if (IsSameString(typeProp, s_MidiSurfaceToken) && tokens.size() == 7)
                             {
                                 if (pList.get_prop(PropertyType_MidiInput) != NULL &&
                                     pList.get_prop(PropertyType_MidiOutput) != NULL &&
@@ -1255,7 +1257,7 @@ void CSurfIntegrator::Init()
                                     midiSurfacesIO_.push_back(make_unique<Midi_ControlSurfaceIO>(this, nameProp, channelCount, GetMidiInputForPort(midiIn), GetMidiOutputForPort(midiOut), surfaceRefreshRate, maxMIDIMesssagesPerRun));
                                 }
                             }
-                            else if (( ! strcmp(typeProp, s_OSCSurfaceToken) || ! strcmp(typeProp, s_OSCX32SurfaceToken)) && tokens.size() == 7)
+                            else if ((IsSameString(typeProp, s_OSCSurfaceToken) || IsSameString(typeProp, s_OSCX32SurfaceToken)) && tokens.size() == 7)
                             {
                                 if (pList.get_prop(PropertyType_ReceiveOnPort) != NULL &&
                                     pList.get_prop(PropertyType_TransmitToPort) != NULL &&
@@ -1267,9 +1269,9 @@ void CSurfIntegrator::Init()
                                     const char *transmitToIPAddress = pList.get_prop(PropertyType_TransmitToIPAddress);
                                     int maxPacketsPerRun = atoi(pList.get_prop(PropertyType_MaxPacketsPerRun));
                                     
-                                    if ( ! strcmp(typeProp, s_OSCSurfaceToken))
+                                    if (IsSameString(typeProp, s_OSCSurfaceToken))
                                         oscSurfacesIO_.push_back(make_unique<OSC_ControlSurfaceIO>(this, nameProp, channelCount, receiveOnPort, transmitToPort, transmitToIPAddress, maxPacketsPerRun));
-                                    else if ( ! strcmp(typeProp, s_OSCX32SurfaceToken))
+                                    else if (IsSameString(typeProp, s_OSCX32SurfaceToken))
                                         oscSurfacesIO_.push_back(make_unique<OSC_X32ControlSurfaceIO>(this, nameProp, channelCount, receiveOnPort, transmitToPort, transmitToIPAddress, maxPacketsPerRun));
                                 }
                             }
@@ -1289,25 +1291,25 @@ void CSurfIntegrator::Init()
                     {
                         if (const char *pageFollowsMCPProp = pList.get_prop(PropertyType_PageFollowsMCP))
                         {
-                            if ( ! strcmp(pageFollowsMCPProp, "No"))
+                            if (IsSameString(pageFollowsMCPProp, "No"))
                                 followMCP = false;
                         }
                         
                         if (const char *synchPagesProp = pList.get_prop(PropertyType_SynchPages))
                         {
-                            if ( ! strcmp(synchPagesProp, "No"))
+                            if (IsSameString(synchPagesProp, "No"))
                                 synchPages = false;
                         }
                         
                         if (const char *scrollLinkProp = pList.get_prop(PropertyType_ScrollLink))
                         {
-                            if ( ! strcmp(scrollLinkProp, "Yes"))
+                            if (IsSameString(scrollLinkProp, "Yes"))
                                 isScrollLinkEnabled = true;
                         }
                         
                         if (const char *scrollSynchProp = pList.get_prop(PropertyType_ScrollSynch))
                         {
-                            if ( ! strcmp(scrollSynchProp, "Yes"))
+                            if (IsSameString(scrollSynchProp, "Yes"))
                                 isScrollSynchEnabled = true;
                         }
 
@@ -1360,9 +1362,7 @@ void CSurfIntegrator::Init()
                                      
                                 if ( ! filesystem::exists(baseDir))
                                 {
-                                    char tmp[MEDBUF];
-                                    snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), baseDir.c_str());
-                                    MessageBox(g_hwnd, tmp, __LOCALIZE("Missing Surfaces Folder","csi_mbox"), MB_OK);
+                                    LogToConsole("[ERROR] Missing Surfaces Folder %s\n", baseDir.c_str());
 
                                     return;
                                 }
@@ -1371,11 +1371,7 @@ void CSurfIntegrator::Init()
                                 
                                 if ( ! filesystem::exists(surfaceFile))
                                 {
-                                    char tmp[MEDBUF];
-                                    snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), surfaceFile.c_str());
-                                    MessageBox(g_hwnd, tmp, __LOCALIZE("Missing Surface File","csi_mbox"), MB_OK);
-
-                                    return;
+                                    LogToConsole("[ERROR] Missing Surfaces File %s\n", surfaceFile.c_str());
                                 }
                                 
                                 string zoneFolder = baseDir + surfaceFolderProp + "/Zones";
@@ -1384,11 +1380,7 @@ void CSurfIntegrator::Init()
                                 
                                 if ( ! filesystem::exists(zoneFolder))
                                 {
-                                    char tmp[MEDBUF];
-                                    snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), zoneFolder.c_str());
-                                    MessageBox(g_hwnd, tmp, __LOCALIZE("Missing Zone Folder","csi_mbox"), MB_OK);
-
-                                    return;
+                                    LogToConsole("[ERROR] Missing Zone Folder %s\n", zoneFolder.c_str());
                                 }
                                 
                                 string fxZoneFolder = baseDir + surfaceFolderProp + "/FXZones";
@@ -1403,12 +1395,8 @@ void CSurfIntegrator::Init()
                                     }
                                     catch (const std::exception& e)
                                     {
-                                        LogToConsole(256, "[ERROR] FAILED to Init. Unable to create folder %s\n", fxZoneFolder.c_str());
-                                        LogToConsole(2048, "Exception: %s\n", e.what());
-
-                                        char tmp[MEDBUF];
-                                        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find %s", "csi_mbox"), fxZoneFolder.c_str());
-                                        MessageBox(g_hwnd, tmp, __LOCALIZE("Missing FX Zone Folder","csi_mbox"), MB_OK);
+                                        LogToConsole("[ERROR] FAILED to Init. Unable to create folder %s\n", fxZoneFolder.c_str());
+                                        LogToConsole("Exception: %s\n", e.what());
 
                                         return;
                                     }
@@ -1419,7 +1407,7 @@ void CSurfIntegrator::Init()
                                 
                                 for (auto &io : midiSurfacesIO_)
                                 {
-                                    if ( ! strcmp(surfaceProp, io->GetName()))
+                                    if (IsSameString(surfaceProp, io->GetName()))
                                     {
                                         foundIt = true;
                                         currentPage->GetSurfaces().push_back(make_unique<Midi_ControlSurface>(this, currentPage, surfaceProp, startChannel, surfaceFile.c_str(), zoneFolder.c_str(), fxZoneFolder.c_str(), io.get()));
@@ -1431,7 +1419,7 @@ void CSurfIntegrator::Init()
                                 {
                                     for (auto &io : oscSurfacesIO_)
                                     {
-                                        if ( ! strcmp(surfaceProp, io->GetName()))
+                                        if (IsSameString(surfaceProp, io->GetName()))
                                         {
                                             foundIt = true;
                                             currentPage->GetSurfaces().push_back(make_unique<OSC_ControlSurface>(this, currentPage, surfaceProp, startChannel, surfaceFile.c_str(), zoneFolder.c_str(), fxZoneFolder.c_str(), io.get()));
@@ -1450,8 +1438,8 @@ void CSurfIntegrator::Init()
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "[ERROR] FAILED to Init in %s, around line %d\n", iniFilePath.c_str(), lineNumber);
-        LogToConsole(2048, "Exception: %s\n", e.what());
+        LogToConsole("[ERROR] FAILED to Init in %s, around line %d\n", iniFilePath.c_str(), lineNumber);
+        LogToConsole("Exception: %s\n", e.what());
     }
     
     if (pages_.size() == 0)
@@ -1535,7 +1523,7 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
 
     
     const char* feedback = widgetProperties_.get_prop(PropertyType_Feedback);
-    if (feedback && !strcmp(feedback, "No"))
+    if (feedback && IsSameString(feedback, "No"))
         provideFeedback_ = false;
 
     const char* holdDelay = widgetProperties_.get_prop(PropertyType_HoldDelay);
@@ -1545,6 +1533,11 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
     const char* holdRepeatInterval = widgetProperties_.get_prop(PropertyType_HoldRepeatInterval);
     if (holdRepeatInterval)
         holdRepeatIntervalMs_ = atoi(holdRepeatInterval);
+
+    const char* runCount = widgetProperties_.get_prop(PropertyType_RunCount);
+    if (runCount)
+        runCount_ = atoi(runCount);
+    if (runCount_ < 1) runCount_ = 1;
 
     for (int i = 0; i < (int)(paramsAndProperties).size(); ++i)
         if (paramsAndProperties[i] == "NoFeedback")
@@ -1566,7 +1559,7 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
         stringParam_ = params[1];
         intParam_= atol(params[2].c_str());
     }
-        
+
     // Action with param index, must be positive
     if (params.size() > 1 && isdigit(params[1][0]))  // C++ 2003 says empty strings can be queried without catastrophe :)
     {
@@ -1596,16 +1589,35 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
          actionName == "ReaperDec" ||
          actionName == "ReaperInc") && params.size() > 1)
     {
-        if (isdigit(params[1][0]))
-        {
+        if (isdigit(params[1][0])) {
             commandId_ =  atol(params[1].c_str());
-        }
-        else // look up by string
-        {
+        } else {
             commandId_ = NamedCommandLookup(params[1].c_str());
-            
             if (commandId_ == 0) // can't find it
                 commandId_ = 65535; // no-op
+        }
+
+        commandText_ = DAW::GetCommandName(commandId_);
+
+        for (int id : GetCSI()->GetReloadingCommandIds()) {
+            if (id == commandId_) {
+                needsReloadAfterRun_ = true;
+                break;
+            }
+        }
+
+        int feedbackState = GetToggleCommandState(commandId_);
+        if (feedbackState == -1) {
+            provideFeedback_ = false;
+            if (g_debugLevel >= DEBUG_LEVEL_NOTICE) LogToConsole("[NOTICE] @%s/{%s}: [%s] %s(%s) # action '%s' (%d) does not provide feedback\n"
+                ,this->GetSurface()->GetName()
+                ,this->GetZone()->GetName()
+                ,this->GetWidget()->GetName()
+                ,this->GetAction()->GetName()
+                ,this->GetStringParam()
+                ,DAW::GetCommandName(commandId_)
+                ,commandId_
+            );
         }
     }
         
@@ -1641,6 +1653,37 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
 
     if (acceleratedTickValues_.size() < 1)
         acceleratedTickValues_.push_back(0);
+
+    ProcessActionTitle(actionName);
+    
+    const char* osdValue = widgetProperties_.get_prop(PropertyType_OSD);
+    osdData_ = osd_data(osdValue ? osdValue : "?");
+    if (osdData_.message == "No")
+        osdData_.message.clear();
+    else if (osdData_.message == "?")
+        osdData_.message = actionTitle_;
+
+    if (actionName == "InvalidAction")
+        osdData_.bgColor = osd_data::COLOR_ERROR;
+}
+
+void ActionContext::ProcessActionTitle(string origName)
+{
+    if (commandId_ > 0) {
+        actionTitle_ = DAW::GetCommandName(commandId_);
+        return;
+    }
+    const char* actionName = this->GetAction()->GetName();
+    const char* stringParam = this->GetStringParam();
+    
+    if (IsSameString(actionName, "TrackAutoMode"))
+        actionTitle_ = string("Automation: ") + TrackNavigationManager::GetAutoModeDisplayNameNoOverride(atoi(stringParam));
+    else if (IsSameString(stringParam, "{")|| IsSameString(stringParam, "["))
+        actionTitle_ = actionName; //TODO: fix parser?
+    else if (IsSameString(actionName, "InvalidAction"))
+        actionTitle_ = "InvalidAction: " + origName;
+    else
+        actionTitle_ = (stringParam && !stringParam[0]) ? string(actionName) + " " + stringParam : actionName;
 }
 
 Page *ActionContext::GetPage()
@@ -1688,6 +1731,7 @@ void ActionContext::UpdateColorValue(double value)
         if (colorValues_.size() > currentColorIndex_)
             widget_->UpdateColorValue(colorValues_[currentColorIndex_]);
     }
+    if (osdData_.IsAwaitFeedback()) ProcessOSD(value, true);
 }
 
 void ActionContext::UpdateWidgetValue(double value)
@@ -1732,42 +1776,56 @@ void ActionContext::ForceWidgetValue(const char* value)
 
 void ActionContext::LogAction(double value)
 {
-    if (g_debugLevel >= DEBUG_LEVEL_INFO)
-    {
-        std::ostringstream oss;
-        if (supportsColor_) {
-            oss << " { ";
-            for (size_t i = 0; i < colorValues_.size(); ++i) {
-                oss << " " << colorValues_[i].r << " " << colorValues_[i].g << " " << colorValues_[i].b;
-                if (i != colorValues_.size() - 1) oss << ", ";
-            }
-            oss << " }[" << currentColorIndex_ << "]";
-        }
-        if (!provideFeedback_) oss << " FeedBack=No";
-        if (isValueInverted_) oss << " Invert";
-        if (isFeedbackInverted_) oss << " InvertFB";
-        if (holdDelayMs_ > 0) oss << " HoldDelay=" << holdDelayMs_;
-        if (holdRepeatIntervalMs_ > 0) oss << " HoldRepeatInterval=" << holdRepeatIntervalMs_;
+    if (g_debugLevel < DEBUG_LEVEL_INFO) return;
+    if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+    if (value < 0 && GetRangeMinimum() >= 0) return;
+    if (value > 0 && GetRangeMinimum() < 0) return;
 
-        LogToConsole(512, "[INFO] @%s/%s: [%s] %s(%s) # %s; val:%0.2f ctx:%s%s\n"
-            ,this->GetSurface()->GetName()
-            ,this->GetZone()->GetName()
-            ,this->GetWidget()->GetName()
-            ,this->GetAction()->GetName()
-            ,this->GetStringParam()
-            ,(this->GetCommandId() > 0) ? DAW::GetCommandName(this->GetCommandId()) : ""
-            ,value
-            ,this->GetName()
-            ,oss.str().c_str()
-        );
+    std::ostringstream oss;
+    if (supportsColor_) {
+        oss << " { ";
+        for (size_t i = 0; i < colorValues_.size(); ++i) {
+            oss << " " << colorValues_[i].r << " " << colorValues_[i].g << " " << colorValues_[i].b;
+            if (i != colorValues_.size() - 1) oss << ", ";
+        }
+        oss << " }[" << currentColorIndex_ << "]";
     }
+    if (!provideFeedback_) oss << " FeedBack=No";
+    if (isValueInverted_) oss << " Invert";
+    if (isFeedbackInverted_) oss << " InvertFB";
+    if (holdDelayMs_ > 0) oss << " HoldDelay=" << holdDelayMs_;
+    if (holdRepeatIntervalMs_ > 0) oss << " HoldRepeatInterval=" << holdRepeatIntervalMs_;
+    if (runCount_ > 1) oss << " RunCount=" << runCount_;
+
+    LogToConsole("[INFO] @%s/%s: [%s] %s(%s)%s # %s; val:%0.2f ctx:%s\n"
+        ,this->GetSurface()->GetName()
+        ,this->GetZone()->GetName()
+        ,this->GetWidget()->GetName()
+        ,this->GetAction()->GetName()
+        ,this->GetStringParam()
+        ,oss.str().c_str()
+        ,(this->GetCommandId() > 0) ? DAW::GetCommandName(this->GetCommandId()) : ""
+        ,value
+        ,this->GetName()
+    );
 }
 
 // runs once button pressed/released
 void ActionContext::DoAction(double value)
 {
-    deferredValue_ = (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? 0.0 : value;
+    DWORD nowTs = GetTickCount();
     int holdDelayMs = holdDelayMs_ == HOLD_DELAY_INHERIT_VALUE ? this->GetSurface()->GetHoldTime() : holdDelayMs_;
+    deferredValue_ = value;
+
+    if ((isDoublePress_ || GetWidget()->HasDoublePressActions()) && value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
+        if (doublePressStartTs_ == 0 || nowTs > doublePressStartTs_ + GetSurface()->GetDoublePressTime()) {
+            doublePressStartTs_ = nowTs;
+            if (isDoublePress_) return; // throttle normal press
+        } else {
+            doublePressStartTs_ = 0;
+            if (!isDoublePress_ && holdDelayMs == 0) return; // block normal press inside double-press window
+        }
+    } 
 
     if (holdRepeatIntervalMs_ > 0) {
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
@@ -1775,7 +1833,7 @@ void ActionContext::DoAction(double value)
         } else {
             if (holdDelayMs == 0) {
                 holdRepeatActive_ = true;
-                lastHoldRepeatTs_ = GetTickCount();
+                lastHoldRepeatTs_ = nowTs;
             }
         }
     }
@@ -1784,7 +1842,7 @@ void ActionContext::DoAction(double value)
             holdActive_ = false;
         } else {
             holdActive_ = true;
-            lastHoldStartTs_ = GetTickCount();
+            lastHoldStartTs_ = nowTs;
         }
     } else {
         PerformAction(value);
@@ -1799,9 +1857,9 @@ void ActionContext::RunDeferredActions()
     if (holdDelayMs > 0
         && holdActive_
         && lastHoldStartTs_ > 0
-        && (int) GetTickCount() > (lastHoldStartTs_ + holdDelayMs)
+        && GetTickCount() > (lastHoldStartTs_ + holdDelayMs)
     ) {
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldStartTs_);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] HOLD [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldStartTs_);
         PerformAction(deferredValue_);
         holdActive_ = false; // to mark that this action with it's defined hold delay was performed and separate it from repeated action trigger
         if (holdRepeatIntervalMs_ > 0) {
@@ -1812,9 +1870,9 @@ void ActionContext::RunDeferredActions()
     if (holdRepeatIntervalMs_ > 0
         && holdRepeatActive_
         && lastHoldRepeatTs_ > 0
-        && (int) GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
+        && GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
     ) {
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] REPEAT [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldRepeatTs_);
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] REPEAT [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldRepeatTs_);
         lastHoldRepeatTs_ = GetTickCount();
         PerformAction(deferredValue_);
     }
@@ -1832,9 +1890,10 @@ void ActionContext::PerformAction(double value)
         }
         else steppedValuesIndex_++;
 
-        DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
+        for (int i = 0; i < runCount_; ++i)
+            DoRangeBoundAction(steppedValues_[steppedValuesIndex_]);
     }
-    else
+    else for (int i = 0; i < runCount_; ++i)
         DoRangeBoundAction(value);
 }
 
@@ -1856,10 +1915,149 @@ void ActionContext::DoRelativeAction(int accelerationIndex, double delta)
         DoRangeBoundAction(action_->GetCurrentNormalizedValue(this) +  (deltaValue_ != 0.0 ? (delta > 0 ? deltaValue_ : -deltaValue_) : delta));
 }
 
+void ActionContext::ProcessOSD(double value, bool fromFeedback)
+{
+    if (!GetSurface()->IsOsdEnabled()) return;
+    if (GetWidget()->IsVirtual()) return;
+    if (osdData_.message.empty()) return;
+    if (!fromFeedback && OsdIgnoresButtonRelease() && value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+    if (value < 0 && GetRangeMinimum() >= 0) return;
+    if (value > 0 && GetRangeMinimum() < 0) return;
+
+    int colorIdx = (int) value;
+    if (osdData_.bgColors.empty()) {
+        if (supportsColor_ && !colorValues_.empty()) {
+
+            if (colorValues_.size() == 1) colorIdx = 0;
+            if ((int) colorValues_.size() - 1 < colorIdx) colorIdx = (int) colorValues_.size() - 1;
+
+            char hexColor[8];
+            snprintf(hexColor, sizeof(hexColor), "#%02X%02X%02X", colorValues_[colorIdx].r, colorValues_[colorIdx].g, colorValues_[colorIdx].b);
+
+            osdData_.bgColor = hexColor;
+        } else if (GetWidget()->GetIsTwoState()) {
+            osdData_.bgColor = (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? "1" : "0";
+        }
+    } else {
+        if (osdData_.bgColors.size() == 1) colorIdx = 0;
+        if ((int) osdData_.bgColors.size() - 1 < colorIdx) colorIdx = (int) osdData_.bgColors.size() - 1;
+        osdData_.bgColor = osdData_.bgColors[colorIdx];
+    }
+    if (osdData_.timeoutMs == 0) osdData_.timeoutMs = GetSurface()->GetOSDTime();
+
+    bool awaitFeedback = osdData_.IsAwaitFeedback();
+    if (provideFeedback_) {
+        if (awaitFeedback) {
+            if (fromFeedback) {
+                osdData_.SetAwaitFeedback(false);
+            } else {
+                return;
+            }
+        } else {
+            return osdData_.SetAwaitFeedback(!fromFeedback);
+        }
+    } else {
+        osdData_.SetAwaitFeedback(false);
+    }
+
+    const string actionName = string(action_->GetName());
+
+    if ((action_->IsVolumeRelated() || action_->IsPanRelated()) && !(action_->IsDisplayRelated() || action_->IsMeterRelated())) {
+        if (MediaTrack *track = this->GetTrack()) {
+            char trackName[256] = "";
+            const char* tn = (const char*)GetSetMediaTrackInfo(track, "P_NAME", nullptr);
+            if (tn && strlen(tn) > 0) strncpy(trackName, tn, sizeof(trackName));
+
+            double vol, pan = 0.0;
+            GetTrackUIVolPan(track, &vol, &pan);
+
+            ostringstream oss;
+            oss << "[" << trackName << "] ";
+            if (action_->IsPanRelated()) {
+                if (pan == 0.0) oss << "Center";
+                else oss << std::fixed << std::setprecision(2) << std::abs(pan * 100) << "%" << (pan > 0 ? "R" : "L");
+            } else oss << std::fixed << std::setprecision(2) << VAL2DB(vol) << " dB";
+            
+            osdData_.message = oss.str();
+        } else {
+            osdData_.message = actionName + ": No track selected";
+        }
+        osdData_.SetAwaitFeedback(false);
+        return GetCSI()->EnqueueOSD(osdData_);
+    }
+
+    if (action_->IsFxRelated() && !(action_->IsDisplayRelated() || action_->IsMeterRelated())) {
+       
+        return GetCSI()->EnqueueOSD(osdData_);
+    }
+    
+    if (action_->IsFxRelated() && !(action_->IsDisplayRelated() || action_->IsMeterRelated())) {
+       
+        return GetCSI()->EnqueueOSD(osdData_);
+    }
+
+    if (actionName == "LastTouchedFXParam") {
+        osdData_.message = DAW::GetLastTouchedFXParamDisplay();
+        osdData_.SetAwaitFeedback(false);
+        return GetCSI()->EnqueueOSD(osdData_);
+    }
+
+    GetCSI()->EnqueueOSD(osdData_);
+}
+
+bool ActionContext::OsdIgnoresButtonRelease() {
+    const char* name = this->GetAction()->GetName();
+    if (!name) return true;
+    //FIXME: make adequate comparison, not by the name string
+    if (IsSameString(name, "Bank")
+     || IsSameString(name, "SetShift")
+     || IsSameString(name, "SetOption")
+     || IsSameString(name, "SetControl")
+     || IsSameString(name, "SetAlt")
+     || IsSameString(name, "SetFlip")
+     || IsSameString(name, "SetGlobal")
+     || IsSameString(name, "SetMarker")
+     || IsSameString(name, "SetNudge")
+     || IsSameString(name, "SetZoom")
+     || IsSameString(name, "SetScrub")
+     || IsSameString(name, "FXParam")
+     || IsSameString(name, "JSFXParam")
+     || IsSameString(name, "TCPFXParam")
+     || IsSameString(name, "LastTouchedFXParam")
+     || IsSameString(name, "TrackVolume")
+     || IsSameString(name, "SoftTakeover7BitTrackVolume")
+     || IsSameString(name, "SoftTakeover14BitTrackVolume")
+     || IsSameString(name, "TrackVolumeDB")
+     || IsSameString(name, "TrackPan")
+     || IsSameString(name, "TrackPanPercent")
+     || IsSameString(name, "TrackPanWidth")
+     || IsSameString(name, "TrackPanWidthPercent")
+     || IsSameString(name, "TrackPanL")
+     || IsSameString(name, "TrackPanLPercent")
+     || IsSameString(name, "TrackPanR")
+     || IsSameString(name, "TrackPanRPercent")
+     || IsSameString(name, "TrackPanAutoLeft")
+     || IsSameString(name, "TrackPanAutoRight")
+     || IsSameString(name, "TrackSendVolume")
+     || IsSameString(name, "TrackSendVolumeDB")
+     || IsSameString(name, "TrackSendPan")
+     || IsSameString(name, "TrackSendPanPercent")
+     || IsSameString(name, "TrackReceiveVolume")
+     || IsSameString(name, "TrackReceiveVolumeDB")
+     || IsSameString(name, "TrackReceivePan")
+     || IsSameString(name, "TrackReceivePanPercent")
+     || IsSameString(name, "MoveCursor")
+     || IsSameString(name, "TrackVolumeWithMeterAverageLR")
+     || IsSameString(name, "TrackVolumeWithMeterMaxPeakLR")
+    ) {
+        return false;
+    }
+    return true;
+}
+
 void ActionContext::DoRangeBoundAction(double value)
 {
-    if (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE)
-        this->LogAction(value);
+    this->LogAction(value);
 
     if (value > rangeMaximum_)
         value = rangeMaximum_;
@@ -1870,7 +2068,10 @@ void ActionContext::DoRangeBoundAction(double value)
     if (isValueInverted_)
         value = 1.0 - value;
     
-    action_->Do(this, value);
+    for (int i = 0; i < runCount_; ++i)
+        action_->Do(this, value);
+
+    this->ProcessOSD(value, false);
 }
 
 void ActionContext::DoSteppedValueAction(double delta)
@@ -2109,10 +2310,10 @@ void Zone::AddWidget(Widget *widget)
 void Zone::Activate()
 {
     UpdateCurrentActionContextModifiers();
-    
+    //TODO: fix WidgetN forme HomeZone stops working if subzone has Shift+WidgetN but no WidgetN / subsone requires redefining WidgetN if there are WidgetN+ModifierX
     for (auto &widget : widgets_)
     {
-        if (!strcmp(widget->GetName(), "OnZoneActivation"))
+        if (IsSameString(widget->GetName(), "OnZoneActivation"))
             for (auto &actionContext :  GetActionContexts(widget))
                 actionContext->DoAction(1.0);
 
@@ -2121,11 +2322,11 @@ void Zone::Activate()
 
     isActive_ = true;
     
-    if (!strcmp(GetName(), "VCA"))
+    if (IsSameString(GetName(), "VCA"))
         zoneManager_->GetSurface()->GetPage()->VCAModeActivated();
-    else if (!strcmp(GetName(), "Folder"))
+    else if (IsSameString(GetName(), "Folder"))
         zoneManager_->GetSurface()->GetPage()->FolderModeActivated();
-    else if (!strcmp(GetName(), "SelectedTracks"))
+    else if (IsSameString(GetName(), "SelectedTracks"))
         zoneManager_->GetSurface()->GetPage()->SelectedTracksModeActivated();
 
     zoneManager_->GetSurface()->SendOSCMessage(GetName());
@@ -2139,7 +2340,7 @@ void Zone::Activate()
 
 void Zone::Deactivate()
 {
-    if (!isActive_)
+    if (! isActive_)
         return;
     for (auto &widget : widgets_)
     {
@@ -2148,18 +2349,18 @@ void Zone::Deactivate()
             actionContext->UpdateWidgetValue(0.0);
             actionContext->UpdateWidgetValue("");
 
-            if (!strcmp(widget->GetName(), "OnZoneDeactivation"))
+            if (IsSameString(widget->GetName(), "OnZoneDeactivation"))
                 actionContext->DoAction(1.0);
         }
     }
 
     isActive_ = false;
     
-    if (!strcmp(GetName(), "VCA"))
+    if (IsSameString(GetName(), "VCA"))
         zoneManager_->GetSurface()->GetPage()->VCAModeDeactivated();
-    else if (!strcmp(GetName(), "Folder"))
+    else if (IsSameString(GetName(), "Folder"))
         zoneManager_->GetSurface()->GetPage()->FolderModeDeactivated();
-    else if (!strcmp(GetName(), "SelectedTracks"))
+    else if (IsSameString(GetName(), "SelectedTracks"))
         zoneManager_->GetSurface()->GetPage()->SelectedTracksModeDeactivated();
     
     for (auto &includedZone : includedZones_)
@@ -2295,7 +2496,7 @@ void Zone::DoTouch(Widget *widget, const char *widgetName, bool &isUsed, double 
         for (auto &actionContext : GetActionContexts(widget))
             actionContext->DoTouch(value);
     }
-    else
+    else 
     {
         for (auto &includedZone : includedZones_)
             includedZone->DoTouch(widget, widgetName, isUsed, value);
@@ -2331,8 +2532,16 @@ void Zone::UpdateCurrentActionContextModifier(Widget *widget)
 
 ActionContext *Zone::AddActionContext(Widget *widget, int modifier, Zone *zone, const char *actionName, vector<string> &params)
 {
-    actionContextDictionary_[widget][modifier].push_back(make_unique<ActionContext>(csi_, csi_->GetAction(actionName), widget, zone, 0, params));
-    
+    const auto& action = csi_->GetAction(actionName);
+    if (!IsSameString(action->GetName(), actionName) && IsSameString(action->GetName(), "InvalidAction")) LogToConsole("[ERROR] @%s/{%s} [%s] InvalidAction: '%s'.\n"
+        ,widget->GetSurface()->GetName()
+        ,zone->GetName()
+        ,widget->GetName()
+        ,actionName
+    );
+
+    actionContextDictionary_[widget][modifier].push_back(make_unique<ActionContext>(csi_, action, widget, zone, 0, params));
+
     return actionContextDictionary_[widget][modifier].back().get();
 }
 
@@ -2399,12 +2608,6 @@ void  Widget::ForceValue(const PropertyList &properties, const char * const &val
         feedbackProcessor->ForceValue(properties, value);
 }
 
-void Widget::RunDeferredActions()
-{
-    for (auto &feedbackProcessor : feedbackProcessors_)
-        feedbackProcessor->RunDeferredActions();
-}
-
 void  Widget::UpdateColorValue(const rgba_color &color)
 {
     for (auto &feedbackProcessor : feedbackProcessors_)
@@ -2431,7 +2634,7 @@ void  Widget::ForceClear()
 
 void Widget::LogInput(double value)
 {
-    if (g_surfaceInDisplay) LogToConsole(256, "IN <- %s %s %f\n", GetSurface()->GetName(), GetName(), value);
+    if (g_surfaceInDisplay) LogToConsole("IN <- %s %s %f\n", GetSurface()->GetName(), GetName(), value);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2463,7 +2666,7 @@ void Midi_FeedbackProcessor::ForceMidiMessage(int first, int second, int third)
 
 void Midi_FeedbackProcessor::LogMessage(char* value)
 {
-    if (g_surfaceOutDisplay) LogToConsole(512, "@S:'%s' [W:'%s'] MIDI: %s\n", surface_->GetName(), widget_->GetName(), value);
+    if (g_surfaceOutDisplay) LogToConsole("@S:'%s' [W:'%s'] MIDI: %s\n", surface_->GetName(), widget_->GetName(), value);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // OSC_FeedbackProcessor
@@ -2532,13 +2735,8 @@ void ZoneManager::Initialize()
     PreProcessZones();
 
     if (zoneInfo_.find("Home") == zoneInfo_.end())
-    {
-        char tmp[MEDBUF];
-        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("%s needs a Home Zone to operate, please recheck your installation", "csi_mbox"), surface_->GetName());
-        MessageBox(g_hwnd, tmp, __LOCALIZE("CSI Missing Home Zone", "csi_mbox"), MB_OK);
-        return;
-    }
-            
+        return LogToConsole("[ERROR] Missing Home Zone for %s\n", surface_->GetName());
+
     homeZone_ = make_unique<Zone>(csi_, this, GetSelectedTrackNavigator(), 0, "Home", "Home", zoneInfo_["Home"].filePath);
     LoadZoneFile(homeZone_.get(), "");
     
@@ -2565,12 +2763,12 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
         CSIZoneInfo info;
         info.filePath = filePath;
 
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] PreProcessZoneFile: %s\n", GetRelativePath(filePath.c_str()));
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] PreProcessZoneFile: %s\n", GetRelativePath(filePath.c_str()));
         for (string line; getline(file, line) ; )
         {
             TrimLine(line);
             
-            if (line == "" || (line.size() > 0 && line[0] == '/')) // ignore blank lines and comment lines
+            if (IsCommentedOrEmpty(line))
                 continue;
             
             vector<string> tokens;
@@ -2587,14 +2785,14 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "[ERROR] FAILED to PreProcessZoneFile in %s\n", filePath.c_str());
-        LogToConsole(2048, "Exception: %s\n", e.what());
+        LogToConsole("[ERROR] FAILED to PreProcessZoneFile in %s\n", filePath.c_str());
+        LogToConsole("Exception: %s\n", e.what());
     }
 }
 
 static ModifierManager s_modifierManager(NULL);
 
-void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &isDecrease, bool &isIncrease)
+void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &HasDoublePressPseudoModifier, bool &isDecrease, bool &isIncrease)
 {
     vector<string> tokens;
     GetTokens(tokens, line, '+');
@@ -2615,6 +2813,8 @@ void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidg
                 isFeedbackInverted = true;
             else if (tokens[i] == "Hold")
                 hasHoldModifier = true;
+            else if (tokens[i] == "DoublePress")
+                HasDoublePressPseudoModifier = true;
             else if (tokens[i] == "Decrease")
                 isDecrease = true;
             else if (tokens[i] == "Increase")
@@ -2629,33 +2829,34 @@ void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidg
 
 void ZoneManager::GetNavigatorsForZone(const char *zoneName, const char *navigatorName, vector<Navigator *> &navigators)
 {
-    if (!strcmp(navigatorName, "MasterTrackNavigator") || !strcmp(zoneName, "MasterTrack"))
+    if (IsSameString(navigatorName, "MasterTrackNavigator") || IsSameString(zoneName, "MasterTrack"))
         navigators.push_back(GetMasterTrackNavigator());
-    else if (!strcmp(zoneName, "MasterTrackFXMenu"))
+    else if (IsSameString(zoneName, "MasterTrackFXMenu"))
         for (int i = 0; i < GetNumChannels(); ++i)
             navigators.push_back(GetMasterTrackNavigator());
-    else if (!strcmp(navigatorName, "TrackNavigator") ||
-             !strcmp(zoneName, "Track") ||
-             !strcmp(zoneName, "VCA") ||
-             !strcmp(zoneName, "Folder") ||
-             !strcmp(zoneName, "SelectedTracks") ||
-             !strcmp(zoneName, "TrackSend") ||
-             !strcmp(zoneName, "TrackReceive") ||
-             !strcmp(zoneName, "TrackFXMenu"))
+    else if (IsSameString(navigatorName, "TrackNavigator") ||
+             IsSameString(zoneName, "Track") ||
+             IsSameString(zoneName, "VCA") ||
+             IsSameString(zoneName, "Folder") ||
+             IsSameString(zoneName, "SelectedTracks") ||
+             IsSameString(zoneName, "TrackSend") ||
+             IsSameString(zoneName, "TrackReceive") ||
+             IsSameString(zoneName, "TrackFXMenu"))
         for (int i = 0; i < GetNumChannels(); ++i)
         {
             Navigator *channelNavigator = GetSurface()->GetPage()->GetNavigatorForChannel(i + GetSurface()->GetChannelOffset());
             if (channelNavigator)
                 navigators.push_back(channelNavigator);
         }
-    else if (!strcmp(zoneName, "SelectedTrack") ||
-             !strcmp(zoneName, "SelectedTrackSend") ||
-             !strcmp(zoneName, "SelectedTrackReceive") ||
-             !strcmp(zoneName, "SelectedTrackFXMenu"))
+    else if (IsSameString(zoneName, "SelectedTrack") ||
+             IsSameString(zoneName, "SelectedTrackSend") ||
+             IsSameString(zoneName, "SelectedTrackReceive") ||
+             IsSameString(zoneName, "SelectedTrackFXMenu"))
         for (int i = 0; i < GetNumChannels(); ++i)
             navigators.push_back(GetSelectedTrackNavigator());
-    else if (!strcmp(navigatorName, "FocusedFXNavigator"))
+    else if (IsSameString(navigatorName, "FocusedFXNavigator"))
         navigators.push_back(GetFocusedFXNavigator());
+    //TODO: what about FixedTrackNavigator?
     else
         navigators.push_back(GetSelectedTrackNavigator());
 }
@@ -2718,14 +2919,14 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
     {
         ifstream file(filePath);
         
-        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(2048, "[DEBUG] {Z:%s} # LoadZoneFile: %s\n", zone->GetName(), GetRelativePath(filePath));
-        for (string line; getline(file, line) ; )
-        {
+        if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] {%s} # LoadZoneFile: %s\n", zone->GetName(), GetRelativePath(filePath));
+        
+        for (string line; getline(file, line);) {
             TrimLine(line);
             
             lineNumber++;
             
-            if (line == "" || (line.size() > 0 && line[0] == '/')) // ignore blank lines and comment lines
+            if (IsCommentedOrEmpty(line))
                 continue;
             
             if (line == s_BeginAutoSection || line == s_EndAutoSection)
@@ -2744,7 +2945,7 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
             else if (tokens[0] == "SubZonesEnd")
             {
                 isInSubZonesSection = false;
-                zone->InitSubZones(subZonesList, widgetSuffix);
+                zone->InitSubZones(subZonesList, widgetSuffix); //FIXME prevent recursion
             }
             else if (isInSubZonesSection)
                 subZonesList.push_back(tokens[0]);
@@ -2754,7 +2955,11 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
             else if (tokens[0] == "IncludedZonesEnd")
             {
                 isInIncludedZonesSection = false;
-                LoadZones(zone->GetIncludedZones(), includedZonesList);
+                try {
+                    LoadZones(zone->GetIncludedZones(), includedZonesList);  //FIXME prevent recursion
+                } catch (const std::exception& e) {
+                    LogToConsole("[ERROR] %s in IncludedZones section in file %s\n", e.what(), GetRelativePath(zone->GetSourceFilePath()));
+                }
             }
             else if (isInIncludedZonesSection)
                 includedZonesList.push_back(tokens[0]);
@@ -2766,10 +2971,11 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 bool isValueInverted = false;
                 bool isFeedbackInverted = false;
                 bool hasHoldModifier = false;
+                bool HasDoublePressPseudoModifier = false;
                 bool isDecrease = false;
                 bool isIncrease = false;
                 
-                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, isDecrease, isIncrease);
+                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, HasDoublePressPseudoModifier, isDecrease, isIncrease);
                 
                 Widget *widget = GetSurface()->GetWidgetByName(widgetName);
                                             
@@ -2786,18 +2992,34 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 // For legacy .zon definitions
                 if (tokens[1] == "NullDisplay")
                     continue;
-                
-                ActionContext *context = zone->AddActionContext(widget, modifier, zone, tokens[1].c_str(), memberParams);
+
+                ActionContext *context;
+                try {
+                    context = zone->AddActionContext(widget, modifier, zone, tokens[1].c_str(), memberParams);
+                } catch (const std::exception& e) {
+                    LogToConsole("[ERROR] FAILED to AddActionContext for line '%s': %s\n", line.c_str(), e.what());
+                    continue;
+                }
+
+                if (context == NULL)
+                    continue;
+
 
                 if (isValueInverted)
-                        context->SetIsValueInverted();
+                    context->SetIsValueInverted();
                     
                 if (isFeedbackInverted)
                     context->SetIsFeedbackInverted();
                 
                 if (hasHoldModifier && context->GetHoldDelay() == 0)
                     context->SetHoldDelay(ActionContext::HOLD_DELAY_INHERIT_VALUE);
-
+                
+                if (HasDoublePressPseudoModifier)
+                {
+                    context->SetDoublePress();
+                    widget->SetHasDoublePressActions();
+                }
+                
                 vector<double> range;
                 
                 if (isDecrease)
@@ -2817,8 +3039,8 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
     }
     catch (const std::exception& e)
     {
-        LogToConsole(256, "[ERROR] FAILED to LoadZoneFile in %s, around line %d\n", zone->GetSourceFilePath(), lineNumber);
-        LogToConsole(2048, "Exception: %s\n", e.what());
+        LogToConsole("[ERROR] FAILED to LoadZoneFile in %s, around line %d\n", zone->GetSourceFilePath(), lineNumber);
+        LogToConsole("Exception: %s\n", e.what());
     }
 }
 
@@ -2830,27 +3052,27 @@ void ZoneManager::AddListener(ControlSurface *surface)
 void ZoneManager::SetListenerCategories(PropertyList &pList)
 {
     if (const char *property =  pList.get_prop(PropertyType_GoHome))
-        if (! strcmp(property, "Yes"))
+        if (IsSameString(property, "Yes"))
             listensToGoHome_ = true;
     
     if (const char *property =  pList.get_prop(PropertyType_SelectedTrackSends))
-        if (! strcmp(property, "Yes"))
+        if (IsSameString(property, "Yes"))
             listensToSends_ = true;
     
     if (const char *property =  pList.get_prop(PropertyType_SelectedTrackReceives))
-        if (! strcmp(property, "Yes"))
+        if (IsSameString(property, "Yes"))
             listensToReceives_ = true;
     
     if (const char *property =  pList.get_prop(PropertyType_FXMenu))
-        if (! strcmp(property, "Yes"))
+        if (IsSameString(property, "Yes"))
             listensToFXMenu_ = true;
     
     if (const char *property =  pList.get_prop(PropertyType_SelectedTrackFX))
-        if (! strcmp(property, "Yes"))
+        if (IsSameString(property, "Yes"))
             listensToSelectedTrackFX_ = true;
     
     if (const char *property =  pList.get_prop(PropertyType_Modifiers))
-        if (! strcmp(property, "Yes"))
+        if (IsSameString(property, "Yes"))
             surface_->SetListensToModifiers();;
 }
 
@@ -2895,7 +3117,7 @@ void ZoneManager::CheckFocusedFXState()
         char fxName[MEDBUF];
         TrackFX_GetFXName(focusedTrack, fxSlot, fxName, sizeof(fxName));
         
-        if(focusedFXZone_ != NULL && focusedFXZone_->GetSlotIndex() == fxSlot && !strcmp(fxName, focusedFXZone_->GetName()))
+        if(focusedFXZone_ != NULL && focusedFXZone_->GetSlotIndex() == fxSlot && IsSameString(fxName, focusedFXZone_->GetName()))
             return;
         else
             ClearFocusedFX();
@@ -2979,29 +3201,16 @@ void ZoneManager::UpdateCurrentActionContextModifiers()
 void ZoneManager::PreProcessZones()
 {
     if (zoneFolder_[0] == 0)
-    {
-        char tmp[2048];
-        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your CSI.ini, cannot find Zone folder for %s in:\r\n\r\n%s/CSI/Zones/","csi_mbox"), GetSurface()->GetName(), GetResourcePath());
-        MessageBox(g_hwnd, tmp, __LOCALIZE("Zone folder definiton for surface is empty","csi_mbox"), MB_OK);
+        return LogToConsole("[ERROR] Please check your CSI.ini, cannot find Zone folder for %s in: %s/CSI/Zones/", GetSurface()->GetName(), GetResourcePath());
 
-        return;
-    }
-    
     vector<string>  zoneFilesToProcess;
-    
-    listFilesOfType(zoneFolder_ + "/", zoneFilesToProcess, ".zon"); // recursively find all .zon files, starting at zoneFolder
-       
-    if (zoneFilesToProcess.size() == 0)
-    {
-        char tmp[2048];
-        snprintf(tmp, sizeof(tmp), __LOCALIZE_VERFMT("Please check your installation, cannot find Zone files for %s in:\r\n\r\n%s","csi_mbox"), GetSurface()->GetName(), zoneFolder_.c_str());
-        MessageBox(g_hwnd, tmp, __LOCALIZE("Zone folder is missing or empty","csi_mbox"), MB_OK);
+    collectFilesOfType(".zon", zoneFolder_, zoneFilesToProcess);
 
-        return;
-    }
-          
-    listFilesOfType(fxZoneFolder_ + "/", zoneFilesToProcess, ".zon"); // recursively find all .zon files, starting at fxZoneFolder
-     
+    if (zoneFilesToProcess.size() == 0)
+        return LogToConsole("[ERROR] Cannot find Zone files for %s in: %s", GetSurface()->GetName(), zoneFolder_.c_str());
+    
+    collectFilesOfType(".zon", fxZoneFolder_, zoneFilesToProcess);
+
     for (const string &zoneFile : zoneFilesToProcess)
         PreProcessZoneFile(zoneFile);
 }
@@ -3017,7 +3226,7 @@ void ZoneManager::DoAction(Widget *widget, double value)
     
 void ZoneManager::DoAction(Widget *widget, double value, bool &isUsed)
 {
-    if (surface_->GetModifiers().size() > 0)
+    if (!widget->IsVirtual() && value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE && surface_->GetModifiers().size() > 0)
         WidgetMoved(this, widget, surface_->GetModifiers()[0]);
     
     if (learnFocusedFXZone_ != NULL)
@@ -3269,7 +3478,7 @@ void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latch
         if (heldTime >= (DWORD) latchTime) {
             if (modifiers_[modifier].isLocked == true) {
                 modifiers_[modifier].isLocked = false;
-                if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] [%s] UNLOCK\n", modifierName);
+                if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] [%s] UNLOCK\n", modifierName);
                 char tmp[256];
                 snprintf(tmp, sizeof(tmp), "%s Unlock", modifierName);
                 csi_->Speak(tmp);
@@ -3277,7 +3486,7 @@ void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latch
             modifiers_[modifier].isEngaged = false;
         } else {
             auto modifierName = stringFromModifier(modifier);
-            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] [%s] [LOCK]\n", modifierName);
+            if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole("[DEBUG] [%s] [LOCK]\n", modifierName);
             char tmp[256];
             snprintf(tmp, sizeof(tmp), "%s Lock", modifierName);
             csi_->Speak(tmp);
@@ -3893,7 +4102,7 @@ void Midi_ControlSurface::ProcessMidiMessage(const MIDI_event_ex_t *evt)
 {
     if (g_surfaceRawInDisplay)
     {
-        LogToConsole(256, "IN <- %s %02x %02x %02x \n", name_.c_str(), evt->midi_message[0], evt->midi_message[1], evt->midi_message[2]);
+        LogToConsole("IN <- %s %02x %02x %02x \n", name_.c_str(), evt->midi_message[0], evt->midi_message[1], evt->midi_message[2]);
         // LogStackTraceToConsole();
     }
 
@@ -3938,7 +4147,7 @@ void Midi_ControlSurface::SendMidiMessage(int first, int second, int third)
 {
     surfaceIO_->SendMidiMessage(first, second, third);
     
-    if (g_surfaceOutDisplay) LogToConsole(256, "%s %02x %02x %02x # Midi_ControlSurface::SendMidiMessage\n", ("OUT->" + name_).c_str(), first, second, third);
+    if (g_surfaceOutDisplay) LogToConsole("%s %02x %02x %02x # Midi_ControlSurface::SendMidiMessage\n", ("OUT->" + name_).c_str(), first, second, third);
 }
 
  ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3952,8 +4161,7 @@ OSC_ControlSurfaceIO::OSC_ControlSurfaceIO(CSurfIntegrator *const csi, const cha
     // private:
     maxPacketsPerRun_ = maxPacketsPerRun < 0 ? 0 : maxPacketsPerRun;
 
-    if (strcmp(receiveOnPort, transmitToPort))
-    {
+    if (!IsSameString(receiveOnPort, transmitToPort)) {
         inSocket_  = GetInputSocketForPort(surfaceName, atoi(receiveOnPort));
         outSocket_ = GetOutputSocketForAddressAndPort(surfaceName, transmitToIpAddress, atoi(transmitToPort));
     }
@@ -4099,7 +4307,7 @@ void OSC_ControlSurface::ProcessOSCMessage(const char *message, double value)
     if (CSIMessageGeneratorsByMessage_.find(message) != CSIMessageGeneratorsByMessage_.end())
         CSIMessageGeneratorsByMessage_[message]->ProcessMessage(value);
     
-    if (g_surfaceInDisplay) LogToConsole(MEDBUF, "IN <- %s %s %f\n", name_.c_str(), message, value);
+    if (g_surfaceInDisplay) LogToConsole("IN <- %s %s %f\n", name_.c_str(), message, value);
 }
 
 void OSC_ControlSurface::SendOSCMessage(const char *zoneName)
@@ -4110,49 +4318,49 @@ void OSC_ControlSurface::SendOSCMessage(const char *zoneName)
 
     surfaceIO_->SendOSCMessage(oscAddress.c_str());
         
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "->LoadingZone---->%s\n", name_.c_str());
+    if (g_surfaceOutDisplay) LogToConsole("->LoadingZone---->%s\n", name_.c_str());
 }
 
 void OSC_ControlSurface::SendOSCMessage(const char *oscAddress, int value)
 {
     surfaceIO_->SendOSCMessage(oscAddress, value);
         
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "OUT->%s %s %d # Surface::SendOSCMessage 1\n", name_.c_str(), oscAddress, value);
+    if (g_surfaceOutDisplay) LogToConsole("OUT->%s %s %d # Surface::SendOSCMessage 1\n", name_.c_str(), oscAddress, value);
 }
 
 void OSC_ControlSurface::SendOSCMessage(const char *oscAddress, double value)
 {
     surfaceIO_->SendOSCMessage(oscAddress, value);
         
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "OUT->%s %s %f # Surface::SendOSCMessage 2\n", name_.c_str(), oscAddress, value);
+    if (g_surfaceOutDisplay) LogToConsole("OUT->%s %s %f # Surface::SendOSCMessage 2\n", name_.c_str(), oscAddress, value);
 }
 
 void OSC_ControlSurface::SendOSCMessage(const char *oscAddress, const char *value)
 {
     surfaceIO_->SendOSCMessage(oscAddress, value);
         
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "OUT->%s %s %s # Surface::SendOSCMessage 3\n", name_.c_str(), oscAddress, value);
+    if (g_surfaceOutDisplay) LogToConsole("OUT->%s %s %s # Surface::SendOSCMessage 3\n", name_.c_str(), oscAddress, value);
 }
 
 void OSC_ControlSurface::SendOSCMessage(OSC_FeedbackProcessor *feedbackProcessor, const char *oscAddress, double value)
 {
     surfaceIO_->SendOSCMessage(oscAddress, value);
     
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "OUT->%s %s %f # Surface::SendOSCMessage 4\n", feedbackProcessor->GetWidget()->GetName(), oscAddress, value);
+    if (g_surfaceOutDisplay) LogToConsole("OUT->%s %s %f # Surface::SendOSCMessage 4\n", feedbackProcessor->GetWidget()->GetName(), oscAddress, value);
 }
 
 void OSC_ControlSurface::SendOSCMessage(OSC_FeedbackProcessor *feedbackProcessor, const char *oscAddress, int value)
 {
     surfaceIO_->SendOSCMessage(oscAddress, value);
 
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "OUT->%s %s %s %d # Surface::SendOSCMessage 5\n", name_.c_str(), feedbackProcessor->GetWidget()->GetName(), oscAddress, value);
+    if (g_surfaceOutDisplay) LogToConsole("OUT->%s %s %s %d # Surface::SendOSCMessage 5\n", name_.c_str(), feedbackProcessor->GetWidget()->GetName(), oscAddress, value);
 }
 
 void OSC_ControlSurface::SendOSCMessage(OSC_FeedbackProcessor *feedbackProcessor, const char *oscAddress, const char *value)
 {
     surfaceIO_->SendOSCMessage(oscAddress, value);
 
-    if (g_surfaceOutDisplay) LogToConsole(MEDBUF, "OUT->%s %s %s %s # Surface::SendOSCMessage 6\n", name_.c_str(), feedbackProcessor->GetWidget()->GetName(), oscAddress, value);
+    if (g_surfaceOutDisplay) LogToConsole("OUT->%s %s %s %s # Surface::SendOSCMessage 6\n", name_.c_str(), feedbackProcessor->GetWidget()->GetName(), oscAddress, value);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -4332,7 +4540,9 @@ static IReaperControlSurface *createFunc(const char *type_string, const char *co
 
 static HWND configFunc(const char *type_string, HWND parent, const char *initConfigString)
 {
-    return CreateDialogParam(g_hInst, MAKEINTRESOURCE(IDD_SURFACEEDIT_CSI), parent, dlgProcMainConfig, (LPARAM)initConfigString);
+    HWND hwnd = CreateDialogParam(g_hInst, MAKEINTRESOURCE(IDD_SURFACEEDIT_CSI), parent, dlgProcMainConfig, (LPARAM)initConfigString);
+    if (hwnd) g_openDialogs.push_back(hwnd);
+    return hwnd;
 }
 
 reaper_csurf_reg_t csurf_integrator_reg =

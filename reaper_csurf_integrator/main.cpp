@@ -13,45 +13,31 @@ REAPER_PLUGIN_HINSTANCE g_hInst; // used for dialogs, if any
 HWND g_hwnd;
 reaper_plugin_info_t *g_reaper_plugin_info;
 
-extern "C"
-{
-REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance, reaper_plugin_info_t *reaper_plugin_info)
+extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInstance, reaper_plugin_info_t *reaper_plugin_info)
 {
     g_hInst = hInstance;
     
-    if (! reaper_plugin_info)
-    {
+    if (!reaper_plugin_info)
         return 0;
-    }
     
     if (reaper_plugin_info->caller_version != REAPER_PLUGIN_VERSION || !reaper_plugin_info->GetFunc)
         return 0;
 
-    if (reaper_plugin_info)
-    {
-        g_hwnd = reaper_plugin_info->hwnd_main;
-        g_reaper_plugin_info = reaper_plugin_info;
+    g_hwnd = reaper_plugin_info->hwnd_main;
+    g_reaper_plugin_info = reaper_plugin_info;
 
-        // load Reaper API functions
-        if (REAPERAPI_LoadAPI(reaper_plugin_info->GetFunc) > 0)
-        {
-            return 0;
-        }
-
-        localize_init(reaper_plugin_info->GetFunc);
-     
-        reaper_plugin_info->Register("csurf",&csurf_integrator_reg);
-
-        // plugin registered
-        return 1;
-    }
-    else
-    {
+    if (!g_hwnd)
         return 0;
-    }
-}
 
-};
+    if (REAPERAPI_LoadAPI(reaper_plugin_info->GetFunc) > 0)
+        return 0;
+
+    localize_init(reaper_plugin_info->GetFunc);
+    
+    reaper_plugin_info->Register("csurf", &csurf_integrator_reg);
+
+    return 1;
+}
     
 #ifndef _WIN32 // import the resources. Note: if you do not have these files, run "php WDL/swell/mac_resgen.php res.rc" from this directory
 #ifdef USING_CMAKE
