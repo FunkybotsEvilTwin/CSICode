@@ -577,6 +577,12 @@ private:
     void LogAction(double value);
     void ProcessOSD(double value, bool fromFeedback);
     bool OsdIgnoresButtonRelease();
+    
+protected:
+    MediaTrack* track_;
+    int trackNum_ = -1, fxSlotNum_ = -1, fxParamNum_ = -1;
+    double lastValue_ = 0.0;
+
 public:
     static int constexpr HOLD_DELAY_INHERIT_VALUE = -1;
     static double constexpr BUTTON_RELEASE_MESSAGE_VALUE = 0.0;
@@ -769,6 +775,79 @@ public:
 
     const char* GetActionTitle();
 
+    void SetLastValue(double value) {
+        lastValue_ = value;
+    }
+
+    bool IsSameAsLastValue(double value) {
+        return DAW::CompareFaderValues(lastValue_, value);
+    }
+
+    double GetTrackFxParamValue() {
+        return DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
+    }
+    void SetTrackFxParamValue(double value) {
+        DAW::SetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_, value);
+    }
+    void EndTrackFxParamEdit() {
+        TrackFX_EndParamEdit(track_, fxSlotNum_, fxParamNum_);
+    }
+
+    double GetTrackVolumeValue() {
+        return DAW::GetTrackVolumeValue(track_);
+    }
+    void SetTrackVolumeValue(double value) {
+        DAW::SetTrackVolumeValue(track_, value);
+    }
+
+    bool CheckCurrentTrackContext() {
+        MediaTrack* currentTrack = this->GetTrack();
+        if (!currentTrack)
+            return ClearCurrentContext();
+        if (track_ != currentTrack)
+            track_ = currentTrack;
+        return true;
+    }
+
+    bool CheckCurrentFxContext() {
+        MediaTrack* currentTrack = this->GetTrack();
+        if (!currentTrack)
+            return ClearCurrentContext();
+        if (track_ != currentTrack)
+            track_ = currentTrack;
+        fxSlotNum_ = this->GetSlotIndex();
+        fxParamNum_ = this->GetParamIndex();
+        return true;
+    }
+    bool CheckLastTouchedFxContext() {
+        if (GetLastTouchedFX(&trackNum_, &fxSlotNum_, &fxParamNum_)) {
+            track_ = DAW::GetTrack(trackNum_);
+            if (track_)
+                return true;
+        }
+        return ClearCurrentContext();
+    }
+    bool CheckCurrentTcpFxContext() {
+        MediaTrack* currentTrack = this->GetTrack();
+        if (!currentTrack)
+            this->ClearCurrentContext();
+        if (track_ != currentTrack)
+            track_ = currentTrack;
+        int index = this->GetIntParam();
+        if (CountTCPFXParms(NULL, track_) <= index)
+            return ClearCurrentContext();
+        if (!GetTCPFXParm(NULL, track_, index, &fxSlotNum_, &fxParamNum_))
+            return ClearCurrentContext();
+        return true;
+    }
+
+    bool ClearCurrentContext() {
+        track_ = nullptr;
+        trackNum_ = -1;
+        fxSlotNum_ = -1;
+        fxParamNum_ = -1;
+        return false;
+    }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3667,12 +3746,11 @@ public:
         OnTrackSelection();
     }
     
-    MediaTrack *GetSelectedTrack()
-    {
-        if (selectedTracks_.size() != 1)
+    MediaTrack *GetSelectedTrack(bool includeMaster = false) {
+        if (CountSelectedTracks2(NULL, includeMaster) != 1)
             return NULL;
         else
-            return selectedTracks_[0];
+            return DAW::GetSelectedTrack(0, includeMaster);
     }
     
 //  Page only uses the following:
@@ -4050,7 +4128,7 @@ public:
     void ToggleSynchPages() { trackNavigationManager_->ToggleSynchPages(); }
     void ToggleFollowMCP() { trackNavigationManager_->ToggleFollowMCP(); }
     void SetTrackOffset(int offset) { trackNavigationManager_->SetTrackOffset(offset); }
-    MediaTrack *GetSelectedTrack() { return trackNavigationManager_->GetSelectedTrack(); }
+    MediaTrack *GetSelectedTrack(bool includeMaster = false) { return trackNavigationManager_->GetSelectedTrack(includeMaster); }
     void NextInputMonitorMode(MediaTrack *track) { trackNavigationManager_->NextInputMonitorMode(track); }
     const char *GetAutoModeDisplayName(int modeIndex) { return trackNavigationManager_->GetAutoModeDisplayName(modeIndex); }
     const char *GetGlobalAutoModeDisplayName() { return trackNavigationManager_->GetGlobalAutoModeDisplayName(); }

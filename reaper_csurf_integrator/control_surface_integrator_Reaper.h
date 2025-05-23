@@ -168,7 +168,7 @@ public:
     
     static void SendCommandMessage(WPARAM wparam) { ::SendMessage(g_hwnd, WM_COMMAND, wparam, 0); }
     
-    static MediaTrack *GetSelectedTrack(int seltrackidx) { return ::GetSelectedTrack(NULL, seltrackidx); }
+    static MediaTrack *GetSelectedTrack(int seltrackidx, bool includeMaster = false) { return ::GetSelectedTrack2(NULL, seltrackidx, includeMaster); }
     
     static bool ValidateTrackPtr(MediaTrack *track) { return ::ValidatePtr(track, "MediaTrack*"); }
     

@@ -35,21 +35,7 @@ public:
     virtual const char* GetName() override { return "TCPFXParam"; }
 
     virtual bool CheckCurrentContext(ActionContext *context) {
-        MediaTrack* currentTrack = context->GetTrack();
-
-        if (!currentTrack)
-            ClearCurrentContext();
-
-        if (track_ != currentTrack)
-            track_ = currentTrack;
-
-        int index = context->GetIntParam();
-        if (CountTCPFXParms(NULL, track_) <= index)
-            return ClearCurrentContext();
-        if (!GetTCPFXParm(NULL, track_, index, &fxSlotNum_, &fxParamNum_))
-            return ClearCurrentContext();
-
-        return true;
+        return context->CheckCurrentTcpFxContext();
     }
 };
 
@@ -58,55 +44,11 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class LastTouchedFXParam : public FXAction
 {
-private:
-    MediaTrack* track_;
-    int trackNum_ = -1, fxSlotNum_ = -1, fxParamNum_ = -1;
-    double lastValue_ = 0.0;
 public:
     virtual const char* GetName() override { return "LastTouchedFXParam"; }
 
-    bool CheckLastTouchedFX() {
-        if (GetLastTouchedFX(&trackNum_, &fxSlotNum_, &fxParamNum_)) {
-            track_ = DAW::GetTrack(trackNum_);
-            if (track_)
-                return true;
-        }
-        track_ = nullptr;
-        trackNum_ = -1;
-        fxSlotNum_ = -1;
-        fxParamNum_ = -1;
-        return false;
-    }
-
-    virtual double GetCurrentNormalizedValue(ActionContext* context) override
-    {
-        if (!CheckLastTouchedFX()) return 0.0;
-        return DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
-    }
-
-    virtual void RequestUpdate(ActionContext* context) override
-    {
-        if (!CheckLastTouchedFX())
-            return context->ClearWidget();
-        double value = DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
-        if (DAW::CompareFaderValues(lastValue_, value)) return;
-        lastValue_ = value;
-        context->UpdateWidgetValue(value);
-    }
-
-    virtual void Do(ActionContext* context, double value) override
-    {
-        if (DAW::CompareFaderValues(lastValue_, value)) return;
-        lastValue_ = value;
-        if (!CheckLastTouchedFX()) return;
-        DAW::SetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_, value);
-    }
-
-    virtual void Touch(ActionContext* context, double value) override
-    {
-        if (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
-        if (!CheckLastTouchedFX()) return;
-        TrackFX_EndParamEdit(track_, fxSlotNum_, fxParamNum_);
+    bool CheckCurrentContext(ActionContext* context) {
+        return context->CheckLastTouchedFxContext();
     }
 };
 

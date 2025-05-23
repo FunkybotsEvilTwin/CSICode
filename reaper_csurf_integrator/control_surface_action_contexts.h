@@ -70,65 +70,50 @@ public:
 class FXAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
-protected:
-    MediaTrack* track_;
-    int trackNum_ = -1, fxSlotNum_ = -1, fxParamNum_ = -1;
-    double lastValue_ = 0.0;
 public:
     virtual const char *GetName() override { return "FXAction"; }
     virtual bool IsFxRelated() { return true; }
 
-    virtual bool ClearCurrentContext() {
-        track_ = nullptr;
-        trackNum_ = -1;
-        fxSlotNum_ = -1;
-        fxParamNum_ = -1;
-        return false;
-    }
-    
     virtual bool CheckCurrentContext(ActionContext *context) {
-        MediaTrack* currentTrack = context->GetTrack();
-
-        if (!currentTrack)
-            return ClearCurrentContext();
-
-        if (track_ != currentTrack)
-            track_ = currentTrack;
-
-        fxSlotNum_ = context->GetSlotIndex();
-        fxParamNum_ = context->GetParamIndex();
-    
-        return true;
+        return context->CheckCurrentFxContext();
     }
 
     virtual double GetCurrentNormalizedValue(ActionContext* context) override
     {
-        if (!CheckCurrentContext(context)) return 0.0;
-        return DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
+        if (!CheckCurrentContext(context))
+            return 0.0;
+        return context->GetTrackFxParamValue();
     }
 
     virtual void RequestUpdate(ActionContext* context) override
     {
         if (!CheckCurrentContext(context))
             return context->ClearWidget();
-        double value = DAW::GetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_);
-        if (DAW::CompareFaderValues(lastValue_, value)) return;
+        double value = context->GetTrackFxParamValue();
+        if (context->IsSameAsLastValue(value))
+            return;
         context->UpdateWidgetValue(value);
-        lastValue_ = value;
+        context->SetLastValue(value);
     }
 
     virtual void Do(ActionContext* context, double value) override
     {
-        if (DAW::CompareFaderValues(lastValue_, value)) return;
-        if (!CheckCurrentContext(context)) return;
-        DAW::SetTrackFxParamValue(track_, fxSlotNum_, fxParamNum_, value);
+        if (context->IsSameAsLastValue(value))
+            return;
+        if (!CheckCurrentContext(context))
+            return;
+        context->SetTrackFxParamValue(value);
+        if (!context->GetProvideFeedback())
+            context->SetLastValue(value);
     }
 
     virtual void Touch(ActionContext* context, double value) override
     {
-        if (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
-        if (!CheckCurrentContext(context)) return;
-        TrackFX_EndParamEdit(track_, fxSlotNum_, fxParamNum_);
+        if (value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE)
+            return;
+        if (!CheckCurrentContext(context))
+            return;
+        context->EndTrackFxParamEdit();
     }
 };
 
@@ -172,61 +157,48 @@ public:
 class VolumeAction : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
-protected:
-    MediaTrack* track_;
-    double lastValue_ = 0.0;
 public:
     virtual const char *GetName() { return "VolumeAction"; }
     virtual bool IsVolumeRelated() { return true; }
-
-    virtual bool ClearCurrentContext() {
-        track_ = nullptr;
-        return false;
-    }
     
     virtual bool CheckCurrentContext(ActionContext *context) {
-        MediaTrack* currentTrack = context->GetTrack();
-
-        if (!currentTrack)
-            return ClearCurrentContext();
-
-        if (track_ != currentTrack)
-            track_ = currentTrack;
-        
-        return true;
+        return context->CheckCurrentTrackContext();
     }
 
-    virtual double GetCurrentNormalizedValue(ActionContext* context) override
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override 
     {
-        if (!CheckCurrentContext(context)) return 0.0;
-        return DAW::GetTrackVolumeValue(track_);
+        if (!CheckCurrentContext(context))
+            return 0.0;
+        return context->GetTrackVolumeValue();
     }
 
     virtual void RequestUpdate(ActionContext* context) override
     {
         if (!CheckCurrentContext(context))
             return context->ClearWidget();
-        double value = DAW::GetTrackVolumeValue(track_);
-        if (DAW::CompareFaderValues(lastValue_, value)) return;
+        double value = context->GetTrackVolumeValue();
         context->UpdateWidgetValue(value);
-        lastValue_ = value;
+        context->SetLastValue(value);
     }
 
     virtual void Do(ActionContext* context, double value) override
     {
-        if (DAW::CompareFaderValues(lastValue_, value)) return;
-        if (!CheckCurrentContext(context)) return;
-        DAW::SetTrackVolumeValue(track_, value);
+        if (context->IsSameAsLastValue(value))
+            return;
+        if (!CheckCurrentContext(context))
+            return;
+        context->SetTrackVolumeValue(value);
+        if (!context->GetProvideFeedback())
+            context->SetLastValue(value);
     }
 
     virtual void Touch(ActionContext* context, double value) override
     {
-        if (!CheckCurrentContext(context)) return;
+        if (!CheckCurrentContext(context))
+            return;
         double currentValue = GetCurrentNormalizedValue(context);
-        if (DAW::CompareFaderValues(lastValue_, currentValue)) return;
-        DAW::SetTrackVolumeValue(track_, currentValue);
+        this->Do(context, currentValue);
     }
-    
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
