@@ -255,6 +255,24 @@ if(WIN32)
   target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_DEPRECATE)
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+
+  # Clang (macOS) specific suppression
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE 
+      -Wno-unused-parameter
+      -Wno-gnu-anonymous-struct
+      -Wno-missing-field-initializers
+      -Wno-ignored-qualifiers
+      -Wno-deprecated-declarations
+      -Wno-unused-function
+      -Wno-sign-compare
+      -Wno-bitwise-instead-of-logical
+      -Wno-inconsistent-missing-override
+      -Wno-unused-but-set-variable
+      -Wno-reorder-ctor
+    )
+  endif()
+
   if(UNIX AND NOT APPLE)
     target_compile_options(${PROJECT_NAME} PRIVATE -include stddef.h)
   endif()
