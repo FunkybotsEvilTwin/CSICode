@@ -1,0 +1,1 @@
+xattr -d com.apple.quarantine ~/Library/Application\ Support/REAPER/UserPlugins/reaper_csurf_integrator.dylib
