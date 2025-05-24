@@ -54,14 +54,17 @@ public:
     virtual void Do(ActionContext *context, double value) override
     {
         int commandId = context->GetCommandId();
+        bool needsReload = context->NeedsReloadAfterRun();
+        string commandName = context->GetCommandText();
+
         // used for Increase/Decrease
         if (value < 0 && context->GetRangeMinimum() < 0)
             DAW::SendCommandMessage(commandId);
         else if (value > 0 && context->GetRangeMinimum() >= 0)
             DAW::SendCommandMessage(commandId);
 
-        if (context->NeedsReloadAfterRun()) {
-            throw ReloadPluginException(context->GetCommandText());
+        if (needsReload) {
+            throw ReloadPluginException(commandName);
         }
     }
 };
