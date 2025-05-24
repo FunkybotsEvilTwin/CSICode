@@ -518,7 +518,7 @@ private:
     int intParam_ = 0;
     
     string stringParam_;
-    
+    vector<string> sourceParams_;
     int paramIndex_ = 0;
     string fxParamDisplayName_;
     
@@ -578,9 +578,11 @@ private:
     void ProcessOSD(double value, bool fromFeedback);
     bool OsdIgnoresButtonRelease();
     
-protected:
+// protected:
     MediaTrack* track_;
-    int trackNum_ = -1, fxSlotNum_ = -1, fxParamNum_ = -1;
+    string trackName_;
+    string fxParamDescription_;
+    int lastTrackNum_ = -1, fxSlotNum_ = -1, fxParamNum_ = -1;
     double lastValue_ = 0.0;
 
 public:
@@ -792,6 +794,9 @@ public:
     void EndTrackFxParamEdit() {
         TrackFX_EndParamEdit(track_, fxSlotNum_, fxParamNum_);
     }
+    string GetTrackFxParamFormattedValue() {
+        return DAW::GetFxParamValue(track_, fxSlotNum_, fxParamNum_);
+    }
 
     double GetTrackVolumeValue() {
         return DAW::GetTrackVolumeValue(track_);
@@ -804,8 +809,10 @@ public:
         MediaTrack* currentTrack = this->GetTrack();
         if (!currentTrack)
             return ClearCurrentContext();
-        if (track_ != currentTrack)
+        if (track_ != currentTrack) {
             track_ = currentTrack;
+            trackName_ = DAW::GetTrackName(track_);
+        }
         return true;
     }
 
@@ -813,37 +820,65 @@ public:
         MediaTrack* currentTrack = this->GetTrack();
         if (!currentTrack)
             return ClearCurrentContext();
-        if (track_ != currentTrack)
+        if (track_ != currentTrack) {
             track_ = currentTrack;
-        fxSlotNum_ = this->GetSlotIndex();
-        fxParamNum_ = this->GetParamIndex();
+            trackName_ = DAW::GetTrackName(track_);
+        }
+        int fxSlotNum = this->GetSlotIndex();
+        int fxParamNum = this->GetParamIndex();
+        if (fxSlotNum_ != fxSlotNum || fxParamNum_ != fxParamNum ) {
+            fxSlotNum_ = fxSlotNum;
+            fxParamNum_ = fxParamNum;
+            fxParamDescription_ = DAW::GetFxParamDescription(track_, fxSlotNum_, fxParamNum_);
+        }
         return true;
     }
     bool CheckLastTouchedFxContext() {
-        if (GetLastTouchedFX(&trackNum_, &fxSlotNum_, &fxParamNum_)) {
-            track_ = DAW::GetTrack(trackNum_);
-            if (track_)
-                return true;
-        }
-        return ClearCurrentContext();
+        int trackNum;
+        int fxSlotNum;
+        int fxParamNum;
+        if (GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) {
+            if (lastTrackNum_ != trackNum || fxSlotNum_ != fxSlotNum || fxParamNum_ != fxParamNum ) {
+                track_ = DAW::GetTrack(lastTrackNum_);
+                if (track_) {
+                    trackName_ = DAW::GetTrackName(track_);
+                    fxSlotNum_ = fxSlotNum;
+                    fxParamNum_ = fxParamNum;
+                    fxParamDescription_ = DAW::GetFxParamDescription(track_, fxSlotNum_, fxParamNum_);
+                } else
+                    return ClearCurrentContext();
+            }
+            return true;
+        } else
+            return ClearCurrentContext();
     }
     bool CheckCurrentTcpFxContext() {
         MediaTrack* currentTrack = this->GetTrack();
         if (!currentTrack)
             this->ClearCurrentContext();
-        if (track_ != currentTrack)
+        if (track_ != currentTrack) {
             track_ = currentTrack;
+            trackName_ = DAW::GetTrackName(track_);
+        }
         int index = this->GetIntParam();
         if (CountTCPFXParms(NULL, track_) <= index)
             return ClearCurrentContext();
-        if (!GetTCPFXParm(NULL, track_, index, &fxSlotNum_, &fxParamNum_))
+        int fxSlotNum;
+        int fxParamNum;
+        if (GetTCPFXParm(NULL, track_, index, &fxSlotNum, &fxParamNum)) {
+             if (fxSlotNum_ != fxSlotNum || fxParamNum_ != fxParamNum ) {
+                fxSlotNum_ = fxSlotNum;
+                fxParamNum_ = fxParamNum;
+                fxParamDescription_ = DAW::GetFxParamDescription(track_, fxSlotNum_, fxParamNum_);
+            }
+        } else
             return ClearCurrentContext();
         return true;
     }
 
     bool ClearCurrentContext() {
         track_ = nullptr;
-        trackNum_ = -1;
+        lastTrackNum_ = -1;
         fxSlotNum_ = -1;
         fxParamNum_ = -1;
         return false;

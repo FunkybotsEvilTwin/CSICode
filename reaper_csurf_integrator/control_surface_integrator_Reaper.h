@@ -304,27 +304,44 @@ public:
         return true;
     }
 
-    static std::string GetLastTouchedFXParamDisplay()
+    static std::string GetFxParamDescription(MediaTrack *track, int fxSlotNum, int fxParamNum) {
+        if (!track)
+            return "";
+        char fxName[256] = "";
+        char paramName[128] = "";
+
+        TrackFX_GetFXName(track, fxSlotNum, fxName, sizeof(fxName));
+        TrackFX_GetParamName(track, fxSlotNum, fxParamNum, paramName, sizeof(paramName));
+
+        string fxShortName = DAW::GetShortFXName(fxName);
+        return "[" + fxShortName  + "] " + paramName;
+    }
+
+    static std::string GetFxParamValue(MediaTrack *track, int fxSlotNum, int fxParamNum) {
+        if (!track)
+            return "";
+        char paramValue[128] = "";
+        TrackFX_GetFormattedParamValue(track, fxSlotNum, fxParamNum, paramValue, sizeof(paramValue));
+        return string(paramValue);
+    }
+
+    static std::string GetTrackName(MediaTrack *track) {
+        const char* tn = static_cast<const char*>(GetSetMediaTrackInfo(track, "P_NAME", nullptr));
+        if (tn && *tn)
+            return std::string(tn);
+        int trackNum = static_cast<int>(reinterpret_cast<intptr_t>(GetSetMediaTrackInfo(track, "IP_TRACKNUMBER", nullptr)));
+        return (trackNum == -1) ? "Master" : "Track " + std::to_string(trackNum);
+    }
+
+    static std::string GetLastTouchedFXParamDescription()
     {
         int trackNum = 0, fxSlotNum = 0, fxParamNum = 0;
         if (!GetLastTouchedFX(&trackNum, &fxSlotNum, &fxParamNum)) return "No FX was touched";
-    
-        char trackName[256] = "?";
-        char fxName[256] = "?";
-        char paramName[128] = "";
-        char paramValue[128] = "";
 
         if (MediaTrack* track = GetTrack(trackNum)) {
-            const char* tn = (const char*)GetSetMediaTrackInfo(track, "P_NAME", nullptr);
-            if (tn && strlen(tn) > 0) strncpy(trackName, tn, sizeof(trackName));
-
-            TrackFX_GetFXName(track, fxSlotNum, fxName, sizeof(fxName));
-            TrackFX_GetParamName(track, fxSlotNum, fxParamNum, paramName, sizeof(paramName));
-            TrackFX_GetFormattedParamValue(track, fxSlotNum, fxParamNum, paramValue, sizeof(paramValue));
-
-            return "[" + GetShortFXName(fxName) + "] " + paramName + ": " + paramValue + " (" + trackName + ")";
+            return DAW::GetFxParamDescription(track, fxSlotNum, fxParamNum) + " (" + DAW::GetTrackName(track) + ")";
         }
-        return "FAILED to GetLastTouchedFXParamDisplay";
+        return "FAILED to GetLastTouchedFXParamDescription";
     }
 
     static std::string GetShortFXName(const char* fullName)

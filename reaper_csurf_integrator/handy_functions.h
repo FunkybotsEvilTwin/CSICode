@@ -182,12 +182,11 @@ static int ExtractSuffixNumber(const std::string& name) {
     return result;
 }
 
-template <size_t N>
-std::string JoinStringArray(const std::string (&arr)[N], const std::string& delimiter) {
+static std::string JoinStringVector(const std::vector<std::string>& strings, const std::string& delimiter) {
     std::ostringstream oss;
-    for (size_t i = 0; i < N; ++i) {
-        oss << arr[i];
-        if (i < N - 1)
+    for (size_t i = 0; i < strings.size(); ++i) {
+        oss << strings[i];
+        if (i < strings.size() - 1)
             oss << delimiter;
     }
     return oss.str();

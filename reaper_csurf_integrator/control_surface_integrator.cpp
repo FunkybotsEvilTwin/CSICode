@@ -1511,13 +1511,11 @@ MediaTrack *FocusedFXNavigator::GetTrack()
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget *widget, Zone *zone, int paramIndex, const vector<string> &paramsAndProperties) : csi_(csi), action_(action), widget_(widget), zone_(zone), paramIndex_(paramIndex)
 {
-    vector<string> params_wr;
-    const vector<string> &params = params_wr;
-    
-    for (int i = 0; i < (int)(paramsAndProperties).size(); ++i)
-    {
+    vector<string> params;
+    for (int i = 0; i < (int)(paramsAndProperties).size(); ++i) {
         if ((paramsAndProperties)[i].find("=") == string::npos)
-            params_wr.push_back((paramsAndProperties)[i]);
+            params.push_back((paramsAndProperties)[i]);
+        sourceParams_.push_back((paramsAndProperties)[i]);
     }
     GetPropertiesFromTokens(0, (int)(paramsAndProperties).size(), paramsAndProperties, widgetProperties_);
 
@@ -1797,14 +1795,13 @@ void ActionContext::LogAction(double value)
     if (holdRepeatIntervalMs_ > 0) oss << " HoldRepeatInterval=" << holdRepeatIntervalMs_;
     if (runCount_ > 1) oss << " RunCount=" << runCount_;
 
-    LogToConsole("[INFO] @%s/%s: [%s] %s(%s)%s # %s; val:%0.2f ctx:%s\n"
+    LogToConsole("[INFO] @%s/%s: [%s] '%s' > %s (%s) val:%0.2f ctx:%s\n"
         ,this->GetSurface()->GetName()
         ,this->GetZone()->GetName()
         ,this->GetWidget()->GetName()
-        ,this->GetAction()->GetName()
-        ,this->GetStringParam()
+        ,JoinStringVector(sourceParams_, " ").c_str()
+        ,actionTitle_.c_str()
         ,oss.str().c_str()
-        ,(this->GetCommandId() > 0) ? DAW::GetCommandName(this->GetCommandId()) : ""
         ,value
         ,this->GetName()
     );
@@ -1964,15 +1961,10 @@ void ActionContext::ProcessOSD(double value, bool fromFeedback)
 
     if ((action_->IsVolumeRelated() || action_->IsPanRelated()) && !(action_->IsDisplayRelated() || action_->IsMeterRelated())) {
         if (MediaTrack *track = this->GetTrack()) {
-            char trackName[256] = "";
-            const char* tn = (const char*)GetSetMediaTrackInfo(track, "P_NAME", nullptr);
-            if (tn && strlen(tn) > 0) strncpy(trackName, tn, sizeof(trackName));
-
+            ostringstream oss;
             double vol, pan = 0.0;
             GetTrackUIVolPan(track, &vol, &pan);
-
-            ostringstream oss;
-            oss << "[" << trackName << "] ";
+            oss << "[" << trackName_ << "] ";
             if (action_->IsPanRelated()) {
                 if (pan == 0.0) oss << "Center";
                 else oss << std::fixed << std::setprecision(2) << std::abs(pan * 100) << "%" << (pan > 0 ? "R" : "L");
@@ -1987,17 +1979,8 @@ void ActionContext::ProcessOSD(double value, bool fromFeedback)
     }
 
     if (action_->IsFxRelated() && !(action_->IsDisplayRelated() || action_->IsMeterRelated())) {
-       
-        return GetCSI()->EnqueueOSD(osdData_);
-    }
-    
-    if (action_->IsFxRelated() && !(action_->IsDisplayRelated() || action_->IsMeterRelated())) {
-       
-        return GetCSI()->EnqueueOSD(osdData_);
-    }
-
-    if (actionName == "LastTouchedFXParam") {
-        osdData_.message = DAW::GetLastTouchedFXParamDisplay();
+        osdData_.message = (fxParamDisplayName_.empty() ? fxParamDescription_ : fxParamDisplayName_);
+        osdData_.message += (osdData_.message.empty()) ? "No FX selected" : ": " + GetTrackFxParamFormattedValue();
         osdData_.SetAwaitFeedback(false);
         return GetCSI()->EnqueueOSD(osdData_);
     }
