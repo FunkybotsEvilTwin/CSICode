@@ -1799,7 +1799,7 @@ void ActionContext::RunDeferredActions()
     if (holdDelayMs > 0
         && holdActive_
         && lastHoldStartTs_ > 0
-        && (int) GetTickCount() > (lastHoldStartTs_ + holdDelayMs)
+        && GetTickCount() > (lastHoldStartTs_ + holdDelayMs)
     ) {
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] HOLD [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldStartTs_);
         PerformAction(deferredValue_);
@@ -1812,7 +1812,7 @@ void ActionContext::RunDeferredActions()
     if (holdRepeatIntervalMs_ > 0
         && holdRepeatActive_
         && lastHoldRepeatTs_ > 0
-        && (int) GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
+        && GetTickCount() > (lastHoldRepeatTs_ + holdRepeatIntervalMs_)
     ) {
         if (g_debugLevel >= DEBUG_LEVEL_DEBUG) LogToConsole(256, "[DEBUG] REPEAT [%s] %d ms\n", GetWidget()->GetName(), GetTickCount() - lastHoldRepeatTs_);
         lastHoldRepeatTs_ = GetTickCount();

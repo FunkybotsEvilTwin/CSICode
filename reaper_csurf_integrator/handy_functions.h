@@ -17,6 +17,8 @@
 #include <iostream>
 #include <vector>
 
+using namespace std;
+
 static double int14ToNormalized(unsigned char msb, unsigned char lsb)
 {
     int val = lsb | (msb<<7);

@@ -499,8 +499,8 @@ private:
 
     int  holdDelayMs_ = 0;
     int  holdRepeatIntervalMs_ = 0;
-    int  lastHoldRepeatTs_ = 0;
-    int  lastHoldStartTs_ = 0;
+    DWORD lastHoldRepeatTs_ = 0;
+    DWORD lastHoldStartTs_ = 0;
     bool holdActive_= false;
     bool holdRepeatActive_ = false;
     double deferredValue_ = 0.0;
@@ -943,7 +943,7 @@ protected:
     string const name_;
     vector<unique_ptr<FeedbackProcessor>> feedbackProcessors_; // owns the objects
     int channelNumber_ = 0;
-    int lastIncomingMessageTime_ = GetTickCount() - 30000;
+    DWORD lastIncomingMessageTime_ = GetTickCount() - 30000;
     double lastIncomingDelta_ = 0.0;
     
     double stepSize_ = 0.0;
@@ -2070,7 +2070,7 @@ public:
 struct ChannelTouch
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
-    int channelNum = 0;;
+    int channelNum = 0;
     bool isTouched = false;
     
     ChannelTouch() {}
