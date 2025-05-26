@@ -1489,12 +1489,24 @@ public:
     
     int GetMidiValue(double value)
     {
-        //D0 yx    : update VU meter, y=channel, x=0..d=volume, e=clip on, f=clip off
-        int midiValue = int(value  *0x0f);
-        if (midiValue > 0x0d)
-            midiValue = 0x0d;
+        int    midiValue = 0;
+        double dbValue   = VAL2DB(normalizedToVol(value));
+        if      (dbValue >= -65  && dbValue < -60) { midiValue = 0x01; }    //  1
+        else if (dbValue >= -60  && dbValue < -55) { midiValue = 0x02; }    
+        else if (dbValue >= -55  && dbValue < -50) { midiValue = 0x03; }    //  3
+        else if (dbValue >= -50  && dbValue < -45) { midiValue = 0x04; } 
+        else if (dbValue >= -45  && dbValue < -40) { midiValue = 0x05; }    //  5
+        else if (dbValue >= -40  && dbValue < -35) { midiValue = 0x06; }     
+        else if (dbValue >= -35  && dbValue < -30) { midiValue = 0x07; }    //  7
+        else if (dbValue >= -30  && dbValue < -25) { midiValue = 0x08; }     
+        else if (dbValue >= -25  && dbValue < -18) { midiValue = 0x09; }    //  9
+        else if (dbValue >= -18  && dbValue < -11) { midiValue = 0x0a; }     
+        else if (dbValue >= -11  && dbValue < -8)  { midiValue = 0x0b; }    // 11
+        else if (dbValue >= -8   && dbValue < -4 ) { midiValue = 0x0c; }     
+        else if (dbValue >= -4   && dbValue <  0 ) { midiValue = 0x0d; }    // 13
+        else if (dbValue >   0                   ) { midiValue = 0x0e; }    // CLIP
 
-        return midiValue;
+        return  midiValue;
     }
 };
 

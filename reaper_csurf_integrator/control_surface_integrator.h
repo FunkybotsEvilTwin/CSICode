@@ -2624,6 +2624,7 @@ public:
 class Midi_ControlSurface : public ControlSurface
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
+
 private:
     Midi_ControlSurfaceIO *const surfaceIO_;
 
@@ -2639,7 +2640,7 @@ private:
 
     void InitializeMCU();
     void InitializeMCUXT();
-    
+
     virtual void InitializeMeters()
     {
         if (hasMCUMeters_)
@@ -2667,7 +2668,13 @@ public:
         hasMCUMeters_ = true;
         displayType_ = displayType;
     }
-    
+
+    bool GetHasMCUMeters(void)
+    {
+        return hasMCUMeters_;
+    }
+
+   
     virtual void HandleExternalInput() override
     {
         surfaceIO_->HandleExternalInput(this);

@@ -2444,10 +2444,16 @@ void Midi_FeedbackProcessor::SendMidiSysExMessage(MIDI_event_ex_t *midiMessage)
 
 void Midi_FeedbackProcessor::SendMidiMessage(int first, int second, int third)
 {
-    if (first != lastMessageSent_.midi_message[0] || second != lastMessageSent_.midi_message[1] || third != lastMessageSent_.midi_message[2])
+    bool updateMeters = surface_->GetHasMCUMeters() && first == 0xd0; // MUST UPDATE METERS REGARDLESS OF LAST MESSAGE SENT AS METERS ON THE WILL DECAY TO OFF IF NOT UPDATE REGULARLY
+ 
+    if (updateMeters  ||  first != lastMessageSent_.midi_message[0] || second != lastMessageSent_.midi_message[1] || third != lastMessageSent_.midi_message[2])
     {
         char buffer[10];
         snprintf(buffer, sizeof(buffer), "%02x %02x %02x", first, second, third);
+
+        if (updateMeters)
+            snprintf(buffer, sizeof(buffer), "%02x %02x", first, second);
+
         this->LogMessage(buffer);
         ForceMidiMessage(first, second, third);
     }
