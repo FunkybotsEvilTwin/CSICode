@@ -1772,19 +1772,19 @@ void ActionContext::LogAction(double value)
 // runs once button pressed/released
 void ActionContext::DoAction(double value)
 {
-    if (isDoublePress_) {
-        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
-        int nowTs = (int) GetTickCount();
+    DWORD nowTs = GetTickCount();
+    int holdDelayMs = holdDelayMs_ == HOLD_DELAY_INHERIT_VALUE ? this->GetSurface()->GetHoldTime() : holdDelayMs_;
+    deferredValue_ = value;
+    
+    if ((isDoublePress_ || GetWidget()->HasDoublePressActions()) && value != ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
         if (doublePressStartTs_ == 0 || nowTs > doublePressStartTs_ + GetSurface()->GetDoublePressTime()) {
             doublePressStartTs_ = nowTs;
-            return;
+            if (isDoublePress_) return; // throttle normal press
         } else {
             doublePressStartTs_ = 0;
+            if (!isDoublePress_ && holdDelayMs == 0) return; // block normal press inside double-press window
         }
     }
-
-    deferredValue_ = (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) ? 0.0 : value;
-    int holdDelayMs = holdDelayMs_ == HOLD_DELAY_INHERIT_VALUE ? this->GetSurface()->GetHoldTime() : holdDelayMs_;
 
     if (holdRepeatIntervalMs_ > 0) {
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) {
@@ -1792,7 +1792,7 @@ void ActionContext::DoAction(double value)
         } else {
             if (holdDelayMs == 0) {
                 holdRepeatActive_ = true;
-                lastHoldRepeatTs_ = GetTickCount();
+                lastHoldRepeatTs_ = nowTs;
             }
         }
     }
@@ -1801,7 +1801,7 @@ void ActionContext::DoAction(double value)
             holdActive_ = false;
         } else {
             holdActive_ = true;
-            lastHoldStartTs_ = GetTickCount();
+            lastHoldStartTs_ = nowTs;
         }
     } else {
         PerformAction(value);
@@ -2619,7 +2619,7 @@ void ZoneManager::PreProcessZoneFile(const string &filePath)
 
 static ModifierManager s_modifierManager(NULL);
 
-void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool &hasDoublePressModifier, bool &isDecrease, bool &isIncrease)
+void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidgetName, int &modifier, bool &isValueInverted, bool &isFeedbackInverted, bool &hasHoldModifier, bool & HasDoublePressPseudoModifier, bool &isDecrease, bool &isIncrease)
 {
     vector<string> tokens;
     GetTokens(tokens, line, '+');
@@ -2641,7 +2641,7 @@ void ZoneManager::GetWidgetNameAndModifiers(const string &line, string &baseWidg
             else if (tokens[i] == "Hold")
                 hasHoldModifier = true;
             else if (tokens[i] == "DoublePress")
-                hasDoublePressModifier = true;
+                HasDoublePressPseudoModifier = true;
             else if (tokens[i] == "Decrease")
                 isDecrease = true;
             else if (tokens[i] == "Increase")
@@ -2793,11 +2793,12 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 bool isValueInverted = false;
                 bool isFeedbackInverted = false;
                 bool hasHoldModifier = false;
+                bool HasDoublePressPseudoModifier = false;
                 bool hasDoublePressModifier = false;
                 bool isDecrease = false;
                 bool isIncrease = false;
                 
-                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, hasDoublePressModifier, isDecrease, isIncrease);
+                GetWidgetNameAndModifiers(tokens[0].c_str(), widgetName, modifier, isValueInverted, isFeedbackInverted, hasHoldModifier, HasDoublePressPseudoModifier, isDecrease, isIncrease);
                 
                 Widget *widget = GetSurface()->GetWidgetByName(widgetName);
                                             
@@ -2826,9 +2827,12 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 if (hasHoldModifier && context->GetHoldDelay() == 0)
                     context->SetHoldDelay(ActionContext::HOLD_DELAY_INHERIT_VALUE);
                 
-                if (hasDoublePressModifier)
+                if (HasDoublePressPseudoModifier)
+                {
                     context->SetDoublePress();
-                
+                    widget->SetHasDoublePressActions();
+                }
+
                 vector<double> range;
                 
                 if (isDecrease)
