@@ -42,8 +42,8 @@ static double volToNormalized(double vol)
     double d=(DB2SLIDER(VAL2DB(vol))/1000.0);
     if (d<0.0)d=0.0;
     else if (d>1.0)d=1.0;
-    
-    return d;
+
+return d;
 }
 
 static double normalizedToPan(double val)
@@ -57,11 +57,11 @@ static double panToNormalized(double val)
 }
 
 enum DebugLevel {
-    DEBUG_LEVEL_ERROR   = 0,
+    DEBUG_LEVEL_ERROR = 0,
     DEBUG_LEVEL_WARNING = 1,
-    DEBUG_LEVEL_NOTICE  = 2,
-    DEBUG_LEVEL_INFO    = 3,
-    DEBUG_LEVEL_DEBUG   = 4
+    DEBUG_LEVEL_NOTICE = 2,
+    DEBUG_LEVEL_INFO = 3,
+    DEBUG_LEVEL_DEBUG = 4
 };
 
 template <typename... Args>
@@ -86,19 +86,19 @@ static void LogToConsole(int size, const char* format, Args... args)
 }
 
 static void LogStackTraceToConsole() {
-// to enable stacktrace change LanguageStandard to stdcpp23
-// Windows\reaper_csurf_integrator\reaper_csurf_integrator\reaper_csurf_integrator.vcxproj
-//   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-//     <ClCompile>
-//       <WarningLevel>Level3</WarningLevel>
-//       <Optimization>Disabled</Optimization>
-//       <SDLCheck>true</SDLCheck>
-//       <PreprocessorDefinitions>_WINDLL;%(PreprocessorDefinitions) _CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-//       <LanguageStandard>stdcpp23</LanguageStandard>
-//     </ClCompile>
-//   </ItemDefinitionGroup>
+    // to enable stacktrace change LanguageStandard to stdcpp23
+    // Windows\reaper_csurf_integrator\reaper_csurf_integrator\reaper_csurf_integrator.vcxproj
+    //   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    //     <ClCompile>
+    //       <WarningLevel>Level3</WarningLevel>
+    //       <Optimization>Disabled</Optimization>
+    //       <SDLCheck>true</SDLCheck>
+    //       <PreprocessorDefinitions>_WINDLL;%(PreprocessorDefinitions) _CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+    //       <LanguageStandard>stdcpp23</LanguageStandard>
+    //     </ClCompile>
+    //   </ItemDefinitionGroup>
 #ifdef _DEBUG
-  #if defined(__cpp_lib_stacktrace)
+#if defined(__cpp_lib_stacktrace)
     auto trace = stacktrace::current();
     LogToConsole(256, "===== Stack Trace Start =====\n");
     for (const auto& frame : trace) {
@@ -119,9 +119,8 @@ static void LogStackTraceToConsole() {
         }
     }
     LogToConsole(256, "===== Stack Trace End =====\n");
-    #else
+#else
     LogToConsole(256, "LogStackTraceToConsole not supported on this compiler. Refer to reaper_csurf_integrator/handy_functions.h LogStackTraceToConsole() on how to enable it.\n");
-  #endif
 #endif
 }
 
@@ -140,5 +139,19 @@ static const char* GetRelativePath(const char* absolutePath)
 
     return absolutePath;
 }
+
+
+static void WindowsOutputDebugString(const char* format, ...)
+{
+    #if defined(_DEBUG) && defined(_WIN32)
+        char buffer[256];
+        va_list argptr;
+        va_start(argptr, format);
+        vsnprintf(buffer, sizeof(buffer) - 1, format, argptr);
+        OutputDebugString(buffer);
+        va_end(argptr);
+    #endif
+}
+
 
 #endif /* handy_functions_h */
