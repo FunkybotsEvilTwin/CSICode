@@ -194,3 +194,12 @@ build/XCBuildData/daa229b5d17bb5a5ffd904dea1ce3745.xcbuilddata/description.msgpa
 build/XCBuildData/daa229b5d17bb5a5ffd904dea1ce3745.xcbuilddata/manifest.json
 build/XCBuildData/daa229b5d17bb5a5ffd904dea1ce3745.xcbuilddata/target-graph.txt
 build/XCBuildData/daa229b5d17bb5a5ffd904dea1ce3745.xcbuilddata/task-store.msgpack
+WDL/
+lib/
+.vs/
+reaper_csurf_integrator.xcodeproj/xcuserdata/christopherreis.xcuserdatad/xcschemes/xcschememanagement.plist
+reaper_csurf_integrator.xcodeproj/xcshareddata/xcschemes/reaper_csurf_integrator.xcscheme
+reaper_csurf_integrator.xcodeproj/project.xcworkspace/xcuserdata/christopherreis.xcuserdatad/WorkspaceSettings.xcsettings
+reaper_csurf_integrator.xcodeproj/project.xcworkspace/xcuserdata/christopherreis.xcuserdatad/UserInterfaceState.xcuserstate
+reaper_csurf_integrator.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+reaper_csurf_integrator.xcodeproj/project.pbxproj
