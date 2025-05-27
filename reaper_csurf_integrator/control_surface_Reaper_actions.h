@@ -3016,6 +3016,9 @@ public:
             
             else if ( ! strcmp(amount, "Marker"))
                 DAW::SendCommandMessage(40173); // move to next marker/region
+
+            else if ( ! strcmp(amount, "Beat"))
+                DAW::SendCommandMessage(41044); // move to next beat
         }
         else if (value < 0.5)
         {
@@ -3024,6 +3027,9 @@ public:
             
             else if ( ! strcmp(amount, "Marker"))
                 DAW::SendCommandMessage(40172); // move to previous marker/region
+
+            else if ( ! strcmp(amount, "Beat"))
+                DAW::SendCommandMessage(41045); // move to previous beat
         }
     }
 };
