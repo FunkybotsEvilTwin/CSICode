@@ -2794,7 +2794,6 @@ void ZoneManager::LoadZoneFile(Zone *zone, const char *filePath, const char *wid
                 bool isFeedbackInverted = false;
                 bool hasHoldModifier = false;
                 bool HasDoublePressPseudoModifier = false;
-                bool hasDoublePressModifier = false;
                 bool isDecrease = false;
                 bool isIncrease = false;
                 
