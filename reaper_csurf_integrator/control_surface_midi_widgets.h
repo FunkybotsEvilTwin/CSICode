@@ -1479,34 +1479,66 @@ public:
 
     virtual void SetValue(const PropertyList &properties, double value) override
     {
-        SendMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(value), 0);
+        SendMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(properties, value), 0);
     }
 
     virtual void ForceValue(const PropertyList &properties, double value) override
     {
-        ForceMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(value), 0);
+        ForceMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(properties, value), 0);
     }
     
-    int GetMidiValue(double value)
+    int GetMidiValue(const PropertyList& properties, double value)
     {
-        int    midiValue  = 0;
-        double   dbValue  = VAL2DB(normalizedToVol(value));
-        if      (dbValue >= -65  &&  dbValue <  -60) midiValue = 0x01;     //  1
-        else if (dbValue >= -60  &&  dbValue <  -55) midiValue = 0x02;     
-        else if (dbValue >= -55  &&  dbValue <  -50) midiValue = 0x03;     //  3
-        else if (dbValue >= -50  &&  dbValue <  -45) midiValue = 0x04;  
-        else if (dbValue >= -45  &&  dbValue <  -40) midiValue = 0x05;     //  5
-        else if (dbValue >= -40  &&  dbValue <  -35) midiValue = 0x06;      
-        else if (dbValue >= -35  &&  dbValue <  -30) midiValue = 0x07;     //  7
-        else if (dbValue >= -30  &&  dbValue <  -25) midiValue = 0x08;      
-        else if (dbValue >= -25  &&  dbValue <  -18) midiValue = 0x09;     //  9
-        else if (dbValue >= -18  &&  dbValue <  -11) midiValue = 0x0a;      
-        else if (dbValue >= -11  &&  dbValue <  -8 ) midiValue = 0x0b;     // 11
-        else if (dbValue >= -8   &&  dbValue <  -4 ) midiValue = 0x0c;      
-        else if (dbValue >= -4   &&  dbValue <=  0 ) midiValue = 0x0d;     // 13
-        else if (dbValue >   0                     ) midiValue = 0x0e;     // CLIP
+        int    midiValue = 0;
+        double   dbValue = VAL2DB(normalizedToVol(value));
 
+        //---------------------------------------------------
+        // HANDLE METER SPECIFIC SCALING, DEFAULT IS "XTOUCH"
+        //---------------------------------------------------
+        char* meterMode = nullptr;
+
+        PropertyType propertyType = properties.prop_from_string("MeterMode");
+        if (propertyType)
+            meterMode = (char*)properties.get_prop(propertyType);
+        if (!meterMode)
+            meterMode = "XTOUCH";
+
+        //---------------------------------------------------//
+        // XTOUCH SCALING                                    //
+        //---------------------------------------------------//
+        if (_stricmp(meterMode, "XTouch") == 0)
+        {
+            if      (dbValue >= -65 && dbValue < -60) midiValue = 0x01;     //  1
+            else if (dbValue >= -60 && dbValue < -55) midiValue = 0x02;
+            else if (dbValue >= -55 && dbValue < -50) midiValue = 0x03;     //  3
+            else if (dbValue >= -50 && dbValue < -45) midiValue = 0x04;
+            else if (dbValue >= -45 && dbValue < -40) midiValue = 0x05;     //  5
+            else if (dbValue >= -40 && dbValue < -35) midiValue = 0x06;
+            else if (dbValue >= -35 && dbValue < -30) midiValue = 0x07;     //  7
+            else if (dbValue >= -30 && dbValue < -25) midiValue = 0x08;
+            else if (dbValue >= -25 && dbValue < -18) midiValue = 0x09;     //  9
+            else if (dbValue >= -18 && dbValue < -11) midiValue = 0x0a;
+            else if (dbValue >= -11 && dbValue < -8 ) midiValue = 0x0b;     // 11
+            else if (dbValue >= -8  && dbValue < -4 ) midiValue = 0x0c;
+            else if (dbValue >= -4  && dbValue <= 0 ) midiValue = 0x0d;     // 13
+            else if (dbValue > 0                    ) midiValue = 0x0e;     // CLIP
+        }
+
+        //---------------------------------------------------//
+        // MCU SINGLE LED SCALING                            //
+        //---------------------------------------------------//
+        else if (_stricmp(meterMode, "MCU") == 0)
+        {
+            midiValue = int(value * 0x0f);
+            if (midiValue > 0x0e)
+                midiValue = 0x0e;
+        }
+        
+        //---------------------------------------------------//
+        // SCALING COMPLETED - RETURN VALUE                  //
+        //---------------------------------------------------//
         return  midiValue;
+
     }
 };
 

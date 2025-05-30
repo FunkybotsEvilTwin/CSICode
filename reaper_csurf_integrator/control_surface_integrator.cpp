@@ -1552,6 +1552,10 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
         runCount_ = atoi(runCount);
     if (runCount_ < 1) runCount_ = 1;
 
+    const char * meterMode  = widgetProperties_.get_prop(PropertyType_MeterMode);
+    if (meterMode  &&  strlen(meterMode) > 0)
+        strncpy(meterMode_, meterMode, sizeof(meterMode_) - 1);
+
     for (int i = 0; i < (int)(paramsAndProperties).size(); ++i)
         if (paramsAndProperties[i] == "NoFeedback")
             provideFeedback_ = false;
