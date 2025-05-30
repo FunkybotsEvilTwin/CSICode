@@ -1504,7 +1504,7 @@ public:
         else if (dbValue >= -11  &&  dbValue <  -8 ) midiValue = 0x0b;     // 11
         else if (dbValue >= -8   &&  dbValue <  -4 ) midiValue = 0x0c;      
         else if (dbValue >= -4   &&  dbValue <=  0 ) midiValue = 0x0d;     // 13
-        else if (dbValue >=  0                     ) midiValue = 0x0e;     // CLIP
+        else if (dbValue >   0                     ) midiValue = 0x0e;     // CLIP
 
         return  midiValue;
     }
