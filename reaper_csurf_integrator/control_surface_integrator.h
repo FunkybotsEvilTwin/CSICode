@@ -58,9 +58,9 @@
 #endif
 
 #ifdef _WIN32
-#define STRCASECMP _stricmp
+#define STRICASECMP _stricmp
 #else
-#define STRCASECMP strcasecmp
+#define STRICASECMP strcasecmp
 #endif
 
 

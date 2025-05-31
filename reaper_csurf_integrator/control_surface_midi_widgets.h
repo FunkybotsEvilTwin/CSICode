@@ -1504,9 +1504,9 @@ public:
             meterMode = "XTOUCH";
 
         //---------------------------------------------------//
-        // XTOUCH SCALING                                    //
+        // XTOUCH                                            //
         //---------------------------------------------------//
-        if (STRCASECMP(meterMode, "XTouch") == 0)
+        if (STRICASECMP(meterMode, "XTouch") == 0)
         {
             if      (dbValue >= -65 && dbValue < -60) midiValue = 0x01;     //  1
             else if (dbValue >= -60 && dbValue < -55) midiValue = 0x02;
@@ -1521,19 +1521,34 @@ public:
             else if (dbValue >= -11 && dbValue < -8 ) midiValue = 0x0b;     // 11
             else if (dbValue >= -8  && dbValue < -4 ) midiValue = 0x0c;
             else if (dbValue >= -4  && dbValue <= 0 ) midiValue = 0x0d;     // 13
-            else if (dbValue > 0                    ) midiValue = 0x0e;     // CLIP
+            else if (dbValue >   0                  ) midiValue = 0x0e;     // CLIP
         }
 
         //---------------------------------------------------//
-        // MCU SINGLE LED SCALING "GAW-ORIGINAL CODE"        //
+        // MCU  "GAW-ORIGINAL CODE"                          //
         //---------------------------------------------------//
-        else if (STRCASECMP(meterMode, "MCU") == 0)
+        else if (STRICASECMP(meterMode, "MCU") == 0)
         {
             midiValue = int(value * 0x0f);
             if (midiValue > 0x0e)
                 midiValue = 0x0e;
         }
-        
+
+        //---------------------------------------------------//
+        // SSLNucleus2                                       //
+        //---------------------------------------------------//
+        else if (STRICASECMP(meterMode, "SSLNucleus2") == 0)
+        {
+            if      (dbValue >= -40 && dbValue < -30) midiValue = 0x01; // -40 DB LED
+            else if (dbValue >= -30 && dbValue < -20) midiValue = 0x03; // -30 DB LED
+            else if (dbValue >= -20 && dbValue < -14) midiValue = 0x05; // -20 DB LED
+            else if (dbValue >= -14 && dbValue < -10) midiValue = 0x07; // -14 DB LED
+            else if (dbValue >= -10 && dbValue < -8 ) midiValue = 0x09; // -10 DB LED
+            else if (dbValue >= -8  && dbValue < -4 ) midiValue = 0x0b; // -8  DB LED
+            else if (dbValue >= -4  && dbValue < -2 ) midiValue = 0x0c; // -4  DB LED
+            else if (dbValue >= -2  && dbValue <  0 ) midiValue = 0x0d; // -2  DB LED
+            else if (dbValue >= 0                   ) midiValue = 0x0e; //  0  DB LED
+        }
         //---------------------------------------------------//
         // SCALING COMPLETED - RETURN VALUE                  //
         //---------------------------------------------------//
