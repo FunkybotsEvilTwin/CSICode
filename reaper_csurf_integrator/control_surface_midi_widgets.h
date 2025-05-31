@@ -1495,7 +1495,7 @@ public:
         //---------------------------------------------------
         // HANDLE METER SPECIFIC SCALING, DEFAULT IS "XTOUCH"
         //---------------------------------------------------
-        char* meterMode = nullptr;
+        const char* meterMode = nullptr;
 
         PropertyType propertyType = properties.prop_from_string("MeterMode");
         if (propertyType)
