@@ -40,6 +40,12 @@
 #include "../WDL/ptrlist.h"
 #include "../WDL/queue.h"
 
+#ifdef _WIN32
+#ifndef strnicmp
+#define strnicmp _strnicmp
+#endif
+#endif
+
 #include "control_surface_integrator_Reaper.h"
 
 #include "handy_functions.h"

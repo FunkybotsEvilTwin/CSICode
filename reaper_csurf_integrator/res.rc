@@ -13,7 +13,7 @@
 #include "afxres.h"
 #endif
 
-#define IDC_STATIC 0
+#define IDC_STATIC -1
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
