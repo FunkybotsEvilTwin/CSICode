@@ -1506,7 +1506,7 @@ public:
         //---------------------------------------------------//
         // XTOUCH SCALING                                    //
         //---------------------------------------------------//
-        if (_stricmp(meterMode, "XTouch") == 0)
+        if (STRCASECMP(meterMode, "XTouch") == 0)
         {
             if      (dbValue >= -65 && dbValue < -60) midiValue = 0x01;     //  1
             else if (dbValue >= -60 && dbValue < -55) midiValue = 0x02;
@@ -1525,9 +1525,9 @@ public:
         }
 
         //---------------------------------------------------//
-        // MCU SINGLE LED SCALING                            //
+        // MCU SINGLE LED SCALING "GAW-ORIGINAL CODE"        //
         //---------------------------------------------------//
-        else if (_stricmp(meterMode, "MCU") == 0)
+        else if (STRCASECMP(meterMode, "MCU") == 0)
         {
             midiValue = int(value * 0x0f);
             if (midiValue > 0x0e)
