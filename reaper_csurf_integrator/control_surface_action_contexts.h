@@ -46,13 +46,6 @@ public:
     virtual void Do(ActionContext *context, double value) override
     {
         int commandID = context->GetCommandId();
-        if  (  commandID == 41743    // Refresh all surfaces", CSI receives the surface control release message after this but no one is home :)
-            || commandID == 40023    // Open new project
-            || commandID == 40025	  // Open project
-            || commandID == 40860    // Close current project tab
-            || commandID == 46000    // Insert track from template
-            )
-           return;
 
         // used for Increase/Decrease
         if (value < 0 && context->GetRangeMinimum() < 0)
