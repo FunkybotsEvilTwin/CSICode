@@ -47,12 +47,6 @@ typedef double ReaSample;
 
 #else
 #include "../WDL/swell/swell.h"
-#ifdef max
-#undef max
-#endif
-#ifdef min
-#undef min
-#endif
 #include <pthread.h>
 
 #define REAPER_PLUGIN_DLL_EXPORT __attribute__((visibility("default")))
