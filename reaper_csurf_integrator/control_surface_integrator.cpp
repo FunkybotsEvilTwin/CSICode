@@ -22,7 +22,7 @@ extern void WidgetMoved(ZoneManager *zoneManager, Widget *widget, int modifier);
 int g_minNumParamSteps = 1;
 int g_maxNumParamSteps = 30;
 #ifdef _DEBUG
-int g_debugLevel = DEBUG_LEVEL_DEBUG;
+int g_debugLevel = DEBUG_LEVEL_NOTICE;
 #else
 int g_debugLevel = DEBUG_LEVEL_ERROR;
 #endif

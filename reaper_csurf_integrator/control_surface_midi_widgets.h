@@ -1479,6 +1479,10 @@ public:
 
     virtual void SetValue(const PropertyList &properties, double value) override
     {
+// THE FOLLOWING COMMENTED OUT CODE WILL BE PUSHED AT A LATER DATE.
+//       int midiValue = GetMidiValue(properties, value);
+//       if (midiValue > 0)
+//            SendMidiMessage(0xd0, (channelNumber_ << 4) | midiValue, 0);
         SendMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(properties, value), 0);
     }
 
@@ -1508,20 +1512,22 @@ public:
         //---------------------------------------------------//
         if (STRICASECMP(meterMode, "XTouch") == 0)
         {
-            if      (dbValue >= -65 && dbValue < -60) midiValue = 0x01;     //  1
-            else if (dbValue >= -60 && dbValue < -55) midiValue = 0x02;
-            else if (dbValue >= -55 && dbValue < -50) midiValue = 0x03;     //  3
-            else if (dbValue >= -50 && dbValue < -45) midiValue = 0x04;
-            else if (dbValue >= -45 && dbValue < -40) midiValue = 0x05;     //  5
-            else if (dbValue >= -40 && dbValue < -35) midiValue = 0x06;
-            else if (dbValue >= -35 && dbValue < -30) midiValue = 0x07;     //  7
-            else if (dbValue >= -30 && dbValue < -25) midiValue = 0x08;
-            else if (dbValue >= -25 && dbValue < -18) midiValue = 0x09;     //  9
-            else if (dbValue >= -18 && dbValue < -11) midiValue = 0x0a;
-            else if (dbValue >= -11 && dbValue < -8 ) midiValue = 0x0b;     // 11
-            else if (dbValue >= -8  && dbValue < -4 ) midiValue = 0x0c;
-            else if (dbValue >= -4  && dbValue <= 0 ) midiValue = 0x0d;     // 13
-            else if (dbValue >   0                  ) midiValue = 0x0e;     // CLIP
+            if      (dbValue >= -60.3 && dbValue < -54.1)  midiValue = 0x01;   // 1 Green1 (breakpoints offset slightly in the code to map better to surface)
+            else if (dbValue >= -54.1 && dbValue < -48.2)  midiValue = 0x02;
+            else if (dbValue >= -48.2 && dbValue < -42.1)  midiValue = 0x03;   // 3 Green2
+            else if (dbValue >= -42.1 && dbValue < -36.2)  midiValue = 0x04;
+
+            else if (dbValue >= -36.2 && dbValue < -30.1)  midiValue = 0x05;   // 5 Green3
+            else if (dbValue >= -30.1 && dbValue < -18.1)  midiValue = 0x06;
+            else if (dbValue >= -18.1 && dbValue < -15.1)  midiValue = 0x07;   // 7 Green4
+            else if (dbValue >= -15.1 && dbValue < -12.1)  midiValue = 0x08;
+
+            else if (dbValue >= -12.1 && dbValue < -9.1)   midiValue = 0x09;   // 9 Orange1
+            else if (dbValue >= -9.1  && dbValue < -6.1)   midiValue = 0x0a;
+            else if (dbValue >= -6.1  && dbValue < -4.6)   midiValue = 0x0b;   // 11 Orange2
+            else if (dbValue >= -4.6  && dbValue < -3.1)   midiValue = 0x0c;
+            else if (dbValue >= -3.1  && dbValue <= 0.1)   midiValue = 0x0d;   // 13 Orange3
+            else if (dbValue >   0.1)                      midiValue = 0x0e;   // Red (clip)
         }
 
         //---------------------------------------------------//
@@ -1544,16 +1550,21 @@ public:
             else if (dbValue >= -20 && dbValue < -14) midiValue = 0x05; // -20 DB LED
             else if (dbValue >= -14 && dbValue < -10) midiValue = 0x07; // -14 DB LED
             else if (dbValue >= -10 && dbValue < -8 ) midiValue = 0x09; // -10 DB LED
-            else if (dbValue >= -8  && dbValue < -4 ) midiValue = 0x0b; // -8  DB LED
-            else if (dbValue >= -4  && dbValue < -2 ) midiValue = 0x0c; // -4  DB LED
+            else if (dbValue >= -8  && dbValue < -6 ) midiValue = 0x0a; // -8  DB LED
+            else if (dbValue >= -6  && dbValue < -4 ) midiValue = 0x0b; // -6  DB LED
+            else if (dbValue >= -4  && dbValue <  2 ) midiValue = 0x0c; // -4  DB LED
             else if (dbValue >= -2  && dbValue <  0 ) midiValue = 0x0d; // -2  DB LED
-            else if (dbValue >= 0                   ) midiValue = 0x0e; //  0  DB LED
+            else if (dbValue >=  0                  ) midiValue = 0x0e; //  0  DB LED
         }
+
         //---------------------------------------------------//
         // SCALING COMPLETED - RETURN VALUE                  //
         //---------------------------------------------------//
-        return  midiValue;
 
+       if (midiValue > 0)
+           WindowsOutputDebugString("MeterMode=%s   track=%d   midvalue=0x%02x\n", meterMode, channelNumber_, midiValue);
+
+        return  midiValue;
     }
 };
 
