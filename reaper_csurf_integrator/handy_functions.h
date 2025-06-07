@@ -20,6 +20,9 @@
 #endif
 #include <iostream>
 #include <vector>
+#include <map>
+#include <algorithm>
+#include "reaper_plugin.h"   // for time_precise(), plugin_register, CountTracks, GetTrack, GetTrackColor
 
 using namespace std;
 
@@ -59,6 +62,94 @@ static double panToNormalized(double val)
 {
     return 0.5 * (val + 1.0);
 }
+
+// Time helper for TrackColorListener
+
+static inline double PreciseTimeMs()
+{
+    return time_precise() * 1000.0;
+}
+
+// Any feedback-processor that wants color updates implements this
+struct ITrackColorListener {
+    virtual ~ITrackColorListener() = default;
+    virtual void OnTrackColorsChanged() = 0;
+};
+
+// TrackColorMonitor: polls the project-state timer and notifies registered listeners
+class TrackColorMonitor {
+public:
+    static TrackColorMonitor& GetInstance()
+    {
+        static TrackColorMonitor instance;
+
+        static bool timerHooked = ([]() {
+            plugin_register("timer", (void*)ColorMonitorTimerProc);
+            return true;
+            })();
+        return instance;
+    }
+
+    void RegisterListener(ITrackColorListener* L)
+    {
+        listeners_.push_back(L);
+    }
+
+    void UnregisterListener(ITrackColorListener* L)
+    {
+        auto it = std::find(listeners_.begin(), listeners_.end(), L);
+        if (it != listeners_.end()) listeners_.erase(it);
+    }
+
+    void CheckProjectState()
+    {
+        int st = GetProjectStateChangeCount(nullptr);
+        if (st != lastProjState_) {
+            lastProjState_ = st;
+            CheckAllTrackColors();
+        }
+    }
+
+    void ForceRefresh()
+    {
+        NotifyListeners();
+    }
+
+private:
+    TrackColorMonitor() : lastProjState_(0) {}
+    ~TrackColorMonitor() = default;
+
+    static void ColorMonitorTimerProc()
+    {
+        GetInstance().CheckProjectState();
+    }
+
+    void CheckAllTrackColors()
+    {
+        bool anyChanged = false;
+        int cnt = CountTracks(nullptr);
+        for (int i = 0; i < cnt; ++i) {
+            MediaTrack* T = GetTrack(nullptr, i);
+            if (!T) continue;
+            int col = GetTrackColor(T);
+            auto it = trackColorCache_.find(T);
+            if (it == trackColorCache_.end() || it->second != col) {
+                trackColorCache_[T] = col;
+                anyChanged = true;
+            }
+        }
+        if (anyChanged) NotifyListeners();
+    }
+
+    void NotifyListeners()
+    {
+        for (auto L : listeners_) if (L) L->OnTrackColorsChanged();
+    }
+
+    int                                 lastProjState_;
+    std::map<MediaTrack*, int>         trackColorCache_;
+    std::vector<ITrackColorListener*>  listeners_;
+};
 
 enum DebugLevel {
     DEBUG_LEVEL_ERROR = 0,

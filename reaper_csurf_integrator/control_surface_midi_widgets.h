@@ -1971,6 +1971,144 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class iCON_V1MDisplay_Midi_FeedbackProcessor : public Midi_FeedbackProcessor, public ITrackColorListener
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+    int    offset_;
+    int    displayType_;
+    int    displayRow_;
+    int    channel_;
+    bool   preventUpdateTrackColors_;
+    bool   colorMonitoringEnabled_;
+
+    std::string lastStringSent_;
+    std::vector<rgba_color> currentTrackColors_;
+
+    double lastColorUpdateTime_{ 0 };
+    bool   pendingColorUpdate_{ false };
+    double pendingUpdateTime_{ 0 };
+    static const unsigned int COLOR_UPDATE_THROTTLE_MS = 50;
+
+public:
+    iCON_V1MDisplay_Midi_FeedbackProcessor(
+        CSurfIntegrator* csi,
+        Midi_ControlSurface* surface,
+        Widget* widget,
+        int displayUpperLower,
+        int displayType,
+        int displayRow,
+        int channel
+    )
+        : Midi_FeedbackProcessor(csi, surface, widget)
+        , offset_(displayUpperLower * 56)
+        , displayType_(displayType)
+        , displayRow_(displayRow)
+        , channel_(channel)
+        , preventUpdateTrackColors_(false)
+        , colorMonitoringEnabled_(true)
+    {
+        rgba_color blank{};
+        for (int i = 0; i < surface_->GetNumChannels(); ++i)
+            currentTrackColors_.push_back(blank);
+
+        TrackColorMonitor::GetInstance().RegisterListener(this);
+    }
+
+    ~iCON_V1MDisplay_Midi_FeedbackProcessor() override
+    {
+        TrackColorMonitor::GetInstance().UnregisterListener(this);
+    }
+
+    virtual const char* GetName() override
+    {
+        return "iCON_V1MDisplay_Midi_FeedbackProcessor";
+    }
+
+    virtual void ForceClear() override
+    {
+        const PropertyList props;
+        ForceValue(props, "");
+    }
+
+    virtual void SetValue(const PropertyList& props, const char* const& inputText) override
+    {
+        if (strcmp(inputText, lastStringSent_.c_str()))
+            ForceValue(props, inputText);
+    }
+
+    virtual void ForceValue(const PropertyList& props, const char* const& inputText) override
+    {
+        CheckPendingUpdate();
+
+        enum { MAX_TEXT_CHARS = 7 };
+        char tmp[MAX_TEXT_CHARS + 1] = { 0 };
+        const char* text = GetWidget()->GetSurface()->GetRestrictedLengthText(inputText, tmp, sizeof(tmp));
+        if (!strcmp(text, "-150.00"))
+            text = "";
+
+        lastStringSent_.assign(text);
+
+        struct { MIDI_event_ex_t evt; char data[256]; } syx{};
+        auto& M = syx.evt;
+        M.frame_offset = 0;
+        M.size = 0;
+        M.midi_message[M.size++] = 0xF0;
+        M.midi_message[M.size++] = 0x00;
+        M.midi_message[M.size++] = 0x00;
+        M.midi_message[M.size++] = 0x66;
+        M.midi_message[M.size++] = displayType_;
+        M.midi_message[M.size++] = displayRow_;
+        M.midi_message[M.size++] = channel_ * 7 + offset_;
+        for (int i = 0; i < MAX_TEXT_CHARS; ++i)
+            M.midi_message[M.size++] = text[i] ? text[i] : ' ';
+        M.midi_message[M.size++] = 0xF7;
+
+        SendMidiSysExMessage(&M);
+        ForceUpdateTrackColors();
+    }
+
+    void OnTrackColorsChanged() override
+    {
+        if (!colorMonitoringEnabled_ || preventUpdateTrackColors_)
+            return;
+
+        pendingColorUpdate_ = true;
+        pendingUpdateTime_ = PreciseTimeMs() + COLOR_UPDATE_THROTTLE_MS;
+
+        if (PreciseTimeMs() - lastColorUpdateTime_ >= COLOR_UPDATE_THROTTLE_MS)
+            ProcessColorUpdate();
+    }
+
+    void CheckPendingUpdate()
+    {
+        if (pendingColorUpdate_ && PreciseTimeMs() >= pendingUpdateTime_)
+            ProcessColorUpdate();
+    }
+
+    void ProcessColorUpdate()
+    {
+        pendingColorUpdate_ = false;
+        lastColorUpdateTime_ = PreciseTimeMs();
+        ForceUpdateTrackColors();
+    }
+
+    virtual void ForceUpdateTrackColors() override
+    {
+        if (preventUpdateTrackColors_)
+            return;
+
+        struct { MIDI_event_ex_t evt; char data[256]; } syx{};
+        auto& E = syx.evt;
+        E.frame_offset = 0;
+        E.size = 0;
+        // … fill E.midi_message with your RGB→7bit+blue-boost bytes …
+        E.midi_message[E.size++] = 0xF7;
+
+        SendMidiSysExMessage(&E);
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class XTouchDisplay_Midi_FeedbackProcessor : public Midi_FeedbackProcessor
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
