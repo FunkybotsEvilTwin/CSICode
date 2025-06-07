@@ -693,6 +693,19 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
             else if (widgetType == "FB_AsparionDisplayEncoder")
                 widget->GetFeedbackProcessors().push_back(make_unique<AsparionDisplay_Midi_FeedbackProcessor>(csi_, this, widget, 0x03, 0x14, 0x19, atoi(tokenLines[i][1].c_str())));
         }
+        else if ((widgetType == "FB_iCON_V1MDisplayUpper" || widgetType == "FB_iCON_V1MDisplayLower" || widgetType == "FB_iCON_V1XDisplayUpper" || widgetType == "FB_iCON_V1XDisplayLower") && size == 2)
+        {
+            if (widgetType == "FB_iCON_V1MDisplayUpper")
+                widget->GetFeedbackProcessors().push_back(make_unique<iCON_V1MDisplay_Midi_FeedbackProcessor>(csi_, this, widget, 0, 0x14, 0x12, atoi(tokenLines[i][1].c_str())));
+            else if (widgetType == "FB_iCON_V1MDisplayLower")
+                widget->GetFeedbackProcessors().push_back(make_unique<iCON_V1MDisplay_Midi_FeedbackProcessor>(csi_, this, widget, 1, 0x14, 0x12, atoi(tokenLines[i][1].c_str())));
+            else if (widgetType == "FB_iCON_V1XDisplayUpper")
+                widget->GetFeedbackProcessors().push_back(make_unique<iCON_V1MDisplay_Midi_FeedbackProcessor>(csi_, this, widget, 0, 0x15, 0x12, atoi(tokenLines[i][1].c_str())));
+            else if (widgetType == "FB_iCON_V1XDisplayLower")
+                widget->GetFeedbackProcessors().push_back(make_unique<iCON_V1MDisplay_Midi_FeedbackProcessor>(csi_, this, widget, 1, 0x15, 0x12, atoi(tokenLines[i][1].c_str())));
+
+            AddTrackColorFeedbackProcessor(widget->GetFeedbackProcessors().back().get());
+        }
         else if ((widgetType == "FB_XTouchDisplayUpper" || widgetType == "FB_XTouchDisplayLower" || widgetType == "FB_XTouchXTDisplayUpper" || widgetType == "FB_XTouchXTDisplayLower") && size == 2)
         {
             if (widgetType == "FB_XTouchDisplayUpper")
