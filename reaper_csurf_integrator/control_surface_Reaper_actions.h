@@ -9,6 +9,14 @@
 
 #include "control_surface_action_contexts.h"
 
+#include "reaper_plugin_functions.h"    // for GetMainHwnd()
+#ifdef _WIN32
+#include <windows.h>                 // for PostMessage, WM_KEYDOWN, VK_*, etc.
+#endif
+#ifdef __APPLE__
+#include <CoreGraphics/CoreGraphics.h> // for CGEventCreateKeyboardEvent, CGEventPost, CFRelease
+#endif
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // class FXParam : public FXAction
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3769,6 +3777,211 @@ public:
         }
         else
             context->ClearWidget();
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class KBLeftArrow : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    const char* GetName() override { return "KBLeftArrow"; }
+    void        RequestUpdate(ActionContext* ctx) override { ctx->UpdateColorValue(0.0); }
+
+    void Do(ActionContext* ctx, double value) override
+    {
+        if (value == 0.0) return;
+        if ((value < 0 && ctx->GetRangeMinimum() < 0) ||
+            (value > 0 && ctx->GetRangeMinimum() >= 0))
+            sendKey();
+    }
+
+private:
+    void sendKey()
+    {
+#ifdef _WIN32
+        HWND hwnd = ::GetFocus(); if (!hwnd) hwnd = ::GetForegroundWindow(); if (!hwnd) return;
+        PostMessage(hwnd, WM_KEYDOWN, VK_LEFT, 0);
+        PostMessage(hwnd, WM_KEYUP, VK_LEFT, 0);
+#elif defined(__APPLE__)
+        CGEventRef d = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)123, true);
+        CGEventRef u = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)123, false);
+        CGEventPost(kCGHIDEventTap, d); CGEventPost(kCGHIDEventTap, u);
+        CFRelease(d); CFRelease(u);
+#elif defined(__linux__)
+        system("xdotool key Left");
+#endif
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class KBRightArrow : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    const char* GetName() override { return "KBRightArrow"; }
+    void        RequestUpdate(ActionContext* ctx) override { ctx->UpdateColorValue(0.0); }
+
+    void Do(ActionContext* ctx, double value) override
+    {
+        if (value == 0.0) return;
+        if ((value < 0 && ctx->GetRangeMinimum() < 0) ||
+            (value > 0 && ctx->GetRangeMinimum() >= 0))
+            sendKey();
+    }
+
+private:
+    void sendKey()
+    {
+#ifdef _WIN32
+        HWND hwnd = ::GetFocus(); if (!hwnd) hwnd = ::GetForegroundWindow(); if (!hwnd) return;
+        PostMessage(hwnd, WM_KEYDOWN, VK_RIGHT, 0);
+        PostMessage(hwnd, WM_KEYUP, VK_RIGHT, 0);
+#elif defined(__APPLE__)
+        CGEventRef d = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)124, true);
+        CGEventRef u = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)124, false);
+        CGEventPost(kCGHIDEventTap, d); CGEventPost(kCGHIDEventTap, u);
+        CFRelease(d); CFRelease(u);
+#elif defined(__linux__)
+        system("xdotool key Right");
+#endif
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class KBUpArrow : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    const char* GetName() override { return "KBUpArrow"; }
+    void        RequestUpdate(ActionContext* ctx) override { ctx->UpdateColorValue(0.0); }
+
+    void Do(ActionContext* ctx, double value) override
+    {
+        if (value == 0.0) return;
+        if ((value < 0 && ctx->GetRangeMinimum() < 0) ||
+            (value > 0 && ctx->GetRangeMinimum() >= 0))
+            sendKey();
+    }
+
+private:
+    void sendKey()
+    {
+#ifdef _WIN32
+        HWND hwnd = ::GetFocus(); if (!hwnd) hwnd = ::GetForegroundWindow(); if (!hwnd) return;
+        PostMessage(hwnd, WM_KEYDOWN, VK_UP, 0);
+        PostMessage(hwnd, WM_KEYUP, VK_UP, 0);
+#elif defined(__APPLE__)
+        CGEventRef d = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)126, true);
+        CGEventRef u = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)126, false);
+        CGEventPost(kCGHIDEventTap, d); CGEventPost(kCGHIDEventTap, u);
+        CFRelease(d); CFRelease(u);
+#elif defined(__linux__)
+        system("xdotool key Up");
+#endif
+    }
+};
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class KBDownArrow : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    const char* GetName() override { return "KBDownArrow"; }
+    void        RequestUpdate(ActionContext* ctx) override { ctx->UpdateColorValue(0.0); }
+
+    void Do(ActionContext* ctx, double value) override
+    {
+        if (value == 0.0) return;
+        if ((value < 0 && ctx->GetRangeMinimum() < 0) ||
+            (value > 0 && ctx->GetRangeMinimum() >= 0))
+            sendKey();
+    }
+
+private:
+    void sendKey()
+    {
+#ifdef _WIN32
+        HWND hwnd = ::GetFocus(); if (!hwnd) hwnd = ::GetForegroundWindow(); if (!hwnd) return;
+        PostMessage(hwnd, WM_KEYDOWN, VK_DOWN, 0);
+        PostMessage(hwnd, WM_KEYUP, VK_DOWN, 0);
+#elif defined(__APPLE__)
+        CGEventRef d = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)125, true);
+        CGEventRef u = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)125, false);
+        CGEventPost(kCGHIDEventTap, d); CGEventPost(kCGHIDEventTap, u);
+        CFRelease(d); CFRelease(u);
+#elif defined(__linux__)
+        system("xdotool key Down");
+#endif
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class KBEnter : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    const char* GetName() override { return "KBEnter"; }
+    void        RequestUpdate(ActionContext* ctx) override { ctx->UpdateColorValue(0.0); }
+
+    void Do(ActionContext* ctx, double value) override
+    {
+        if (value == 0.0) return;
+        if ((value < 0 && ctx->GetRangeMinimum() < 0) ||
+            (value > 0 && ctx->GetRangeMinimum() >= 0))
+            sendKey();
+    }
+
+private:
+    void sendKey()
+    {
+#ifdef _WIN32
+        HWND hwnd = ::GetFocus(); if (!hwnd) hwnd = ::GetForegroundWindow(); if (!hwnd) return;
+        PostMessage(hwnd, WM_KEYDOWN, VK_RETURN, 0);
+        PostMessage(hwnd, WM_KEYUP, VK_RETURN, 0);
+#elif defined(__APPLE__)
+        CGEventRef d = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)36, true);
+        CGEventRef u = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)36, false);
+        CGEventPost(kCGHIDEventTap, d); CGEventPost(kCGHIDEventTap, u);
+        CFRelease(d); CFRelease(u);
+#elif defined(__linux__)
+        system("xdotool key Return");
+#endif
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class KBEscape : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    const char* GetName() override { return "KBEscape"; }
+    void        RequestUpdate(ActionContext* ctx) override { ctx->UpdateColorValue(0.0); }
+
+    void Do(ActionContext* ctx, double value) override
+    {
+        if (value == 0.0) return;
+        if ((value < 0 && ctx->GetRangeMinimum() < 0) ||
+            (value > 0 && ctx->GetRangeMinimum() >= 0))
+            sendKey();
+    }
+
+private:
+    void sendKey()
+    {
+#ifdef _WIN32
+        HWND hwnd = ::GetFocus(); if (!hwnd) hwnd = ::GetForegroundWindow(); if (!hwnd) return;
+        PostMessage(hwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+        PostMessage(hwnd, WM_KEYUP, VK_ESCAPE, 0);
+#elif defined(__APPLE__)
+        CGEventRef d = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)53, true);
+        CGEventRef u = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)53, false);
+        CGEventPost(kCGHIDEventTap, d); CGEventPost(kCGHIDEventTap, u);
+        CFRelease(d); CFRelease(u);
+#elif defined(__linux__)
+        system("xdotool key Escape");
+#endif
     }
 };
 

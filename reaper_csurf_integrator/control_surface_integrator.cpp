@@ -1140,6 +1140,12 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("TrackReceivePanDisplay", make_unique<TrackReceivePanDisplay>()));
     actions_.insert(make_pair("TrackReceiveStereoMonoDisplay", make_unique<TrackReceiveStereoMonoDisplay>()));
     actions_.insert(make_pair("TrackReceivePrePostDisplay", make_unique<TrackReceivePrePostDisplay>()));
+    actions_.insert(make_pair("KBLeftArrow", make_unique<KBLeftArrow>()));
+    actions_.insert(make_pair("KBRightArrow", make_unique<KBRightArrow>()));
+    actions_.insert(make_pair("KBUpArrow", make_unique<KBUpArrow>()));
+    actions_.insert(make_pair("KBDownArrow", make_unique<KBDownArrow>()));
+    actions_.insert(make_pair("KBEnter", make_unique<KBEnter>()));
+    actions_.insert(make_pair("KBEscape", make_unique<KBEscape>()));
 }
 
 void CSurfIntegrator::Init()
