@@ -103,10 +103,17 @@ public:
 
     void CheckProjectState()
     {
+        static int periodicCounter = 0;
+
         int st = GetProjectStateChangeCount(nullptr);
         if (st != lastProjState_) {
             lastProjState_ = st;
             CheckAllTrackColors();
+            periodicCounter = 0;  // Reset periodic check
+        }
+        else if (++periodicCounter >= 5) {  // Every 10 timer calls (~1 second)
+            periodicCounter = 0;
+            CheckAllTrackColors();  // Force check even without state change
         }
     }
 
