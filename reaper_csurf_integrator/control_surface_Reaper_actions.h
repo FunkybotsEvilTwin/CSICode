@@ -1123,8 +1123,57 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class TracksRecordArm : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char* GetName() override { return "TracksRecordArm"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+            return GetMediaTrackInfo_Value(track, "I_RECARM");
+        return 0.0;
+    }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if (context->GetTrack())
+            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
+        else
+            context->ClearWidget();
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+
+        MediaTrack* track = context->GetTrack();
+        if (!track) return;
+
+        int selCount = CountSelectedTracks(NULL);
+        bool isSelected = GetMediaTrackInfo_Value(track, "I_SELECTED") > 0;
+        bool currentArm = GetMediaTrackInfo_Value(track, "I_RECARM") > 0;
+        bool newArm = !currentArm;
+
+        if (selCount > 1 && isSelected)
+        {
+            for (int i = 0; i < selCount; ++i)
+            {
+                MediaTrack* selTrack = GetSelectedTrack(NULL, i);
+                CSurf_SetSurfaceRecArm(selTrack, CSurf_OnRecArmChange(selTrack, newArm), NULL);
+            }
+        }
+        else
+        {
+            CSurf_SetSurfaceRecArm(track, CSurf_OnRecArmChange(track, newArm), NULL);
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class TrackRecordArmDisplay : public Action
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
     virtual const char* GetName() override { return "TrackRecordArmDisplay"; }
@@ -1186,6 +1235,60 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class TracksMute : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char* GetName() override { return "TracksMute"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+        {
+            bool mute = false;
+            GetTrackUIMute(track, &mute);
+            return mute;
+        }
+        return 0.0;
+    }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if (context->GetTrack())
+            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
+        else
+            context->ClearWidget();
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+
+        MediaTrack* track = context->GetTrack();
+        if (!track) return;
+
+        int selCount = CountSelectedTracks(NULL);
+        bool isSelected = GetMediaTrackInfo_Value(track, "I_SELECTED") > 0;
+        bool mute = false;
+        GetTrackUIMute(track, &mute);
+        bool newMute = !mute;
+
+        if (selCount > 1 && isSelected)
+        {
+            for (int i = 0; i < selCount; ++i)
+            {
+                MediaTrack* selTrack = GetSelectedTrack(NULL, i);
+                CSurf_SetSurfaceMute(selTrack, CSurf_OnMuteChange(selTrack, newMute), NULL);
+            }
+        }
+        else
+        {
+            CSurf_SetSurfaceMute(track, CSurf_OnMuteChange(track, newMute), NULL);
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class TrackSolo : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
@@ -1226,6 +1329,56 @@ public:
                 
                 CSurf_SetSurfaceSolo(track, CSurf_OnSoloChange(track, muteSoloFlags), NULL);
             }
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class TracksSolo : public Action
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+public:
+    virtual const char* GetName() override { return "TracksSolo"; }
+
+    virtual double GetCurrentNormalizedValue(ActionContext* context) override
+    {
+        if (MediaTrack* track = context->GetTrack())
+            return GetMediaTrackInfo_Value(track, "I_SOLO") > 0 ? 1 : 0;
+        return 0.0;
+    }
+
+    virtual void RequestUpdate(ActionContext* context) override
+    {
+        if (context->GetTrack())
+            context->UpdateWidgetValue(GetCurrentNormalizedValue(context));
+        else
+            context->ClearWidget();
+    }
+
+    virtual void Do(ActionContext* context, double value) override
+    {
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
+
+        MediaTrack* track = context->GetTrack();
+        if (!track) return;
+
+        int selCount = CountSelectedTracks(NULL);
+        bool isSelected = GetMediaTrackInfo_Value(track, "I_SELECTED") > 0;
+        bool currentSolo = GetMediaTrackInfo_Value(track, "I_SOLO") > 0;
+        bool newSolo = !currentSolo;
+
+        if (selCount > 1 && isSelected)
+        {
+            for (int i = 0; i < selCount; ++i)
+            {
+                MediaTrack* selTrack = GetSelectedTrack(NULL, i);
+                if (selTrack && selTrack != GetMasterTrack(NULL))
+                    CSurf_SetSurfaceSolo(selTrack, CSurf_OnSoloChange(selTrack, newSolo), NULL);
+            }
+        }
+        else
+        {
+            CSurf_SetSurfaceSolo(track, CSurf_OnSoloChange(track, newSolo), NULL);
         }
     }
 };
