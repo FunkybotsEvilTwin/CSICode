@@ -3477,14 +3477,7 @@ public:
         if (value == 0.0) return; // ignore button releases
 
         if (MediaTrack* track = context->GetTrack())
-        {
-            MediaTrack* trackToSelect = context->GetPage()->SetCurrentFolder(track);
-            if (trackToSelect != nullptr)
-            {
-                SetOnlyTrackSelected(trackToSelect);
-                context->GetPage()->OnTrackSelectionBySurface(trackToSelect);
-            }
-        }
+            context->GetPage()->SetCurrentFolder(track);
     }
 };
 
@@ -3504,12 +3497,7 @@ public:
     {
         if (value == 0.0) return; // ignore button releases
 
-        MediaTrack* trackToSelect = context->GetPage()->ExitCurrentFolder();
-        if (trackToSelect != nullptr)
-        {
-            SetOnlyTrackSelected(trackToSelect);
-            context->GetPage()->OnTrackSelectionBySurface(trackToSelect);
-        }
+        context->GetPage()->ExitCurrentFolder();
     }
 };
 
