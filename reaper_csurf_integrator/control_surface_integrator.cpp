@@ -1060,8 +1060,8 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("TrackToggleFolderSpill", make_unique<TrackToggleFolderSpill>()));
     actions_.insert(make_pair("TrackFolderParentDisplay", make_unique<TrackFolderParentDisplay>()));
     actions_.insert(make_pair("ToggleFolderView", make_unique<ToggleFolderView>()));
-    actions_.insert(make_pair("TrackEnterFolder", make_unique<TrackEnterFolder>()));
-    actions_.insert(make_pair("ExitCurrentFolder", make_unique<ExitCurrentFolder>()));
+    actions_.insert(make_pair("TrackSetCurrentFolder", make_unique<TrackSetCurrentFolder>()));
+    actions_.insert(make_pair("SetParentFolderAsCurrent", make_unique<SetParentFolderAsCurrent>()));
     actions_.insert(make_pair("TrackSelect", make_unique<TrackSelect>()));
     actions_.insert(make_pair("TrackUniqueSelect", make_unique<TrackUniqueSelect>()));
     actions_.insert(make_pair("TrackRangeSelect", make_unique<TrackRangeSelect>()));

@@ -3526,7 +3526,7 @@ public:
         trackOffset_ = currentFolderTrackID_;
     }
 
-    void ExitCurrentFolder()
+    void SetParentFolderAsCurrent()
     {
         SetCurrentFolder(parentOfCurrentFolderTrack_); // parentOfCurrentFolderTrack_ will be updated on track list rebuild
     }
@@ -3990,7 +3990,7 @@ public:
     void ToggleFolderView() { trackNavigationManager_->ToggleFolderView(); }
     bool GetIsFolderViewActive() { return trackNavigationManager_->GetIsFolderViewActive(); }
     void SetCurrentFolder(MediaTrack* track) { trackNavigationManager_->SetCurrentFolder(track); }
-    void ExitCurrentFolder() { trackNavigationManager_->ExitCurrentFolder(); }
+    void SetParentFolderAsCurrent() { trackNavigationManager_->SetParentFolderAsCurrent(); }
     void VCAModeActivated() { trackNavigationManager_->VCAModeActivated(); }
     void VCAModeDeactivated() { trackNavigationManager_->VCAModeDeactivated(); }
     void FolderModeActivated() { trackNavigationManager_->FolderModeActivated(); }

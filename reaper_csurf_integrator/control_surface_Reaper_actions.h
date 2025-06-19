@@ -3461,11 +3461,11 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class TrackEnterFolder : public Action
+class TrackSetCurrentFolder : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual const char* GetName() override { return "TrackEnterFolder"; }
+    virtual const char* GetName() override { return "TrackSetCurrentFolder"; }
 
     virtual void RequestUpdate(ActionContext* context) override
     {
@@ -3482,11 +3482,11 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class ExitCurrentFolder : public Action
+class SetParentFolderAsCurrent : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual const char* GetName() override { return "ExitCurrentFolder"; }
+    virtual const char* GetName() override { return "SetParentFolderAsCurrent"; }
 
     virtual void RequestUpdate(ActionContext* context) override
     {
@@ -3497,7 +3497,7 @@ public:
     {
         if (value == 0.0) return; // ignore button releases
 
-        context->GetPage()->ExitCurrentFolder();
+        context->GetPage()->SetParentFolderAsCurrent();
     }
 };
 
