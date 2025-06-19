@@ -3074,7 +3074,36 @@ protected:
             trackOffset_ = trackOffset;
     }
 
-    void ForceScrollLink();
+    void ForceScrollLink()
+    {
+        // Make sure selected track is visible on the control surface
+        MediaTrack *selectedTrack = GetSelectedTrack();
+        
+        if (selectedTrack != NULL)
+        {
+            // Is the selected track already visible on the surface?
+            for (auto &trackNavigator : trackNavigators_)
+                if (selectedTrack == trackNavigator->GetTrack())
+                    return;
+            
+            // Check if the selected track is in the current folder
+            MediaTrack* parentTrack = GetParentTrack(selectedTrack);
+            int parentTrackId = parentTrack ? GetIdFromTrack(parentTrack) : 0;
+            if (currentFolderTrackID_ = parentTrackId)
+            {
+                // If not, chenge the current folder to the selected track's parent
+                currentFolderTrackID_ = parentTrack ? GetIdFromTrack(parentTrack) : 0;
+                RebuildTracks();
+            }
+
+            // Find the selected track in the tracks_ list
+            auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
+            if (it != tracks_.end())
+            {
+                setTrackOffset(static_cast<int>(std::distance(tracks_.begin(), it)));
+            }
+        }
+    }
     
 public:
     TrackNavigationManager(CSurfIntegrator *const csi, Page *page, bool followMCP,  bool synchPages, bool isScrollLinkEnabled, bool isScrollSynchEnabled) :

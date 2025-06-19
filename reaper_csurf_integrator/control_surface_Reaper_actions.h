@@ -3454,13 +3454,9 @@ public:
 
     virtual void Do(ActionContext* context, double value) override
     {
-        if (value == 0.0)
-            return;
+        if (value == 0.0) return; // ignore button releases
 
-        Page* page = context->GetPage();
-        page->ToggleFolderView();
-        page->OnTrackListChange();
-        page->ForceUpdateTrackColors();
+        context->GetPage()->ToggleFolderView();
     }
 };
 
@@ -3511,27 +3507,13 @@ public:
 
     virtual void Do(ActionContext* context, double value) override
     {
-        if (value == 0.0)
-            return;
+        if (value == 0.0) return; // ignore button releases
 
-        Page* page = context->GetPage();
-
-        if (page->GetIsFolderViewActive() && page->IsAtRootFolderLevel())
+        MediaTrack* trackToSelect = context->GetPage()->ExitCurrentFolder();
+        if (trackToSelect != nullptr)
         {
-            page->ToggleFolderView();
-            page->OnTrackListChange();
-            page->ForceUpdateTrackColors();
-        }
-        else
-        {
-            MediaTrack* parent = page->ExitCurrentFolder();
-            page->OnTrackListChange();
-            if (parent)
-            {
-                // select & scroll to that parent folder
-                SetOnlyTrackSelected(parent);
-                page->OnTrackSelectionBySurface(parent);
-            }
+            SetOnlyTrackSelected(trackToSelect);
+            context->GetPage()->OnTrackSelectionBySurface(trackToSelect);
         }
     }
 };
