@@ -3064,33 +3064,24 @@ protected:
         if (selectedTrack != NULL)
         {
             // Is the selected track already visible
-            // TODO: there is a bug here: if you move a track in the TCP, the track navigators are not updated yet when arriving here:
-            // the scroll doesn't work because the selected track is still in the list and we return just here below
             for (auto &trackNavigator : trackNavigators_)
                 if (selectedTrack == trackNavigator->GetTrack())
                     return;
             
-            int trackOffsetInList = -1; // -1 means not found
-
             // Find the selected track in the tracks_ list
-            auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
-            if (it != tracks_.end())
-                trackOffsetInList = std::distance(tracks_.begin(), it);
-
-            if (trackOffsetInList < 0)
+            int trackOffsetInList = 0;
+            bool found = false;
+            for (MediaTrack* track : tracks_)
             {
-                // The selected track is not in the current track list because currentFolderTrackID_ is not its parent:
-                MediaTrack* parentTrack = GetParentTrack(selectedTrack);
-                currentFolderTrackID_ = parentTrack ? GetIdFromTrack(parentTrack) : 0;
-                RebuildTracks();
-
-                // Find the selected track in the tracks_ list
-                auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
-                if (it != tracks_.end())
-                    trackOffsetInList = std::distance(tracks_.begin(), it);
+                if (track == selectedTrack)
+                {
+                    found = true;
+                    break;
+                }
+                ++trackOffsetInList;
             }
 
-            if (trackOffsetInList >= 0)
+            if (found)
             {
                 int trackOffset = currentFolderTrackID_ + trackOffsetInList;
                 int maxOffset = tracks_.size() - trackNavigators_.size();
@@ -3643,13 +3634,13 @@ public:
        
     void OnTrackSelection()
     {
-        if (isScrollLinkEnabled_)
+        if (isScrollLinkEnabled_ && tracks_.size() > trackNavigators_.size())
             ForceScrollLink();
     }
     
     void OnTrackListChange()
     {
-        if (isScrollLinkEnabled_)
+        if (isScrollLinkEnabled_ && tracks_.size() > trackNavigators_.size())
             ForceScrollLink();
     }
 
