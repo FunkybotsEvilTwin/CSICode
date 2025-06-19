@@ -3034,11 +3034,7 @@ protected:
     int selectedTracksOffset_ = 0;
     vector<MediaTrack *> tracks_;
     vector<MediaTrack *> selectedTracks_;
-
-    bool isFolderViewActive_ = false;
-    int currentFolderTrackID_ = 0; // 0 is for root folder
-    MediaTrack* parentOfCurrentFolderTrack_ = nullptr;
-
+    
     vector<MediaTrack *> vcaTopLeadTracks_;
     MediaTrack           *vcaLeadTrack_ = NULL;
     vector<MediaTrack *> vcaLeadTracks_;
@@ -3049,7 +3045,7 @@ protected:
     vector<MediaTrack *> folderParentTracks_;
     vector<MediaTrack *> folderSpillTracks_;
     map<MediaTrack*, vector<MediaTrack*>> folderDictionary_;
-
+ 
     vector<unique_ptr<Navigator>> fixedTrackNavigators_;
     vector<unique_ptr<Navigator>> trackNavigators_;
     unique_ptr<Navigator> masterTrackNavigator_;
@@ -3121,30 +3117,7 @@ public:
     {
         return IsTrackVisible(track, followMCP_);
     }
-
-    void ToggleFolderView()
-    {
-        isFolderViewActive_ = !isFolderViewActive_;
-
-        if (isFolderViewActive_)
-        {
-            // Entering folder view: show the root level
-            currentFolderTrackID_ = 0;
-            trackOffset_ = 0;
-        }
-        else
-        {
-            // When in flat mode, currentFolderTrackID_ must be zero
-            // But trackOffset_ is kept
-            currentFolderTrackID_ = 0;
-        }
-    }
-
-    bool GetIsFolderViewActive() const
-    {
-        return isFolderViewActive_;
-    }
-
+    
     void VCAModeActivated()
     {
         currentTrackVCAFolderMode_ = 1;
@@ -3315,13 +3288,13 @@ public:
        
         trackOffset_ += amount;
         
-        if (trackOffset_ < currentFolderTrackID_)
-            trackOffset_ = currentFolderTrackID_;
+        if (trackOffset_ <  0)
+            trackOffset_ =  0;
         
         int top = numTracks - (int) trackNavigators_.size();
         
-        if (trackOffset_ > currentFolderTrackID_ + top)
-            trackOffset_ = currentFolderTrackID_ + top;
+        if (trackOffset_ >  top)
+            trackOffset_ = top;
         
         if (isScrollSynchEnabled_)
         {
@@ -3391,7 +3364,7 @@ public:
         if (selectedTracksOffset_ > top)
             selectedTracksOffset_ = top;
     }
-
+    
     Navigator *GetNavigatorForChannel(int channelNum)
     {
         for (auto &trackNavigator : trackNavigators_)
@@ -3415,19 +3388,11 @@ public:
     }
     
     MediaTrack *GetTrackFromChannel(int channelNumber)
-    {
+    {       
         if (currentTrackVCAFolderMode_ == 0)
         {
-            if (trackOffset_ < currentFolderTrackID_)
-            {
-                // Just in case, this should never happen
-                currentFolderTrackID_ = 0;
-            }
-
-            // If currentFolderTrackID_ is 0, we are in the root folder (or in flat mode)
-            // If not, we are in a folder: the first displayable track is trackOffset_ + 1, but trackOffset_ is 0-based and currentFolderTrackID_ is 1-based
-            channelNumber += trackOffset_ - currentFolderTrackID_;
-
+            channelNumber += trackOffset_;
+            
             if (channelNumber < GetNumTracks() && channelNumber < tracks_.size() && DAW::ValidateTrackPtr(tracks_[channelNumber]))
                 return tracks_[channelNumber];
             else
@@ -3497,24 +3462,6 @@ public:
         return CSurf_TrackToID(track, followMCP_);
     }
     
-    void SetCurrentFolder(MediaTrack* track)
-    {
-        if (track == nullptr)
-            currentFolderTrackID_ = 0;
-        else if (GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") != 1)
-            return;
-        else
-            currentFolderTrackID_ = CSurf_TrackToID(track, followMCP_);
-
-        // trackOffset is 0-based, currentFolderTrackID_ starts at 1, the track offset points to the first track after the folder track
-        trackOffset_ = currentFolderTrackID_;
-    }
-
-    void SetParentFolderAsCurrent()
-    {
-        SetCurrentFolder(parentOfCurrentFolderTrack_); // parentOfCurrentFolderTrack_ will be updated on track list rebuild
-    }
-
     bool GetIsVCASpilled(MediaTrack *track)
     {
         if (vcaLeadTrack_ == NULL && (DAW::GetTrackGroupMembership(track, "VOLUME_VCA_LEAD") != 0 || DAW::GetTrackGroupMembershipHigh(track, "VOLUME_VCA_LEAD") != 0))
@@ -3971,10 +3918,6 @@ public:
     Navigator *GetMasterTrackNavigator() { return trackNavigationManager_->GetMasterTrackNavigator(); }
     Navigator * GetSelectedTrackNavigator() { return trackNavigationManager_->GetSelectedTrackNavigator(); }
     Navigator * GetFocusedFXNavigator() { return trackNavigationManager_->GetFocusedFXNavigator(); }
-    void ToggleFolderView() { trackNavigationManager_->ToggleFolderView(); }
-    bool GetIsFolderViewActive() { return trackNavigationManager_->GetIsFolderViewActive(); }
-    void SetCurrentFolder(MediaTrack* track) { trackNavigationManager_->SetCurrentFolder(track); }
-    void SetParentFolderAsCurrent() { trackNavigationManager_->SetParentFolderAsCurrent(); }
     void VCAModeActivated() { trackNavigationManager_->VCAModeActivated(); }
     void VCAModeDeactivated() { trackNavigationManager_->VCAModeDeactivated(); }
     void FolderModeActivated() { trackNavigationManager_->FolderModeActivated(); }
