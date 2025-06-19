@@ -3075,7 +3075,7 @@ protected:
             // Find the selected track in the tracks_ list
             auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
             if (it != tracks_.end())
-                trackOffsetInList = static_cast<int>(std::distance(tracks_.begin(), it));
+                trackOffsetInList = std::distance(tracks_.begin(), it);
 
             if (trackOffsetInList < 0)
             {
@@ -3087,13 +3087,13 @@ protected:
                 // Find the selected track in the tracks_ list
                 auto it = std::find(tracks_.begin(), tracks_.end(), selectedTrack);
                 if (it != tracks_.end())
-                    trackOffsetInList = static_cast<int>(std::distance(tracks_.begin(), it));
+                    trackOffsetInList = std::distance(tracks_.begin(), it);
             }
 
             if (trackOffsetInList >= 0)
             {
                 int trackOffset = currentFolderTrackID_ + trackOffsetInList;
-                int maxOffset = static_cast<int>(tracks_.size() - trackNavigators_.size());
+                int maxOffset = tracks_.size() - trackNavigators_.size();
                 if (maxOffset < 0)
                     maxOffset = 0;
                 maxOffset += currentFolderTrackID_;
