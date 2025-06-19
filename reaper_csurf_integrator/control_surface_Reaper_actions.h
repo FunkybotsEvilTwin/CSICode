@@ -3501,10 +3501,12 @@ public:
 
     virtual void RequestUpdate(ActionContext* context) override
     {
-        Page* page = context->GetPage();
-        bool inDrilledFolder = page->GetIsFolderViewActive() && !page->IsAtRootFolderLevel();
-        context->UpdateColorValue(inDrilledFolder ? 1.0 : 0.0);
-        context->UpdateWidgetValue(inDrilledFolder ? 1.0 : 0.0);
+        context->UpdateColorValue(0.0);
+
+        if (context->GetPage()->IsAtRootFolderLevel())
+            context->UpdateWidgetValue(0.0);
+        else
+            context->UpdateWidgetValue(1.0);
     }
 
     virtual void Do(ActionContext* context, double value) override
@@ -3513,18 +3515,23 @@ public:
             return;
 
         Page* page = context->GetPage();
-        // only do anything if we're in folder-view and have drilled in at least one level
-        if (!(page->GetIsFolderViewActive() && !page->IsAtRootFolderLevel()))
-            return;
 
-        MediaTrack* parent = page->ExitCurrentFolder();
-        page->OnTrackListChange();
-        page->ForceUpdateTrackColors();
-
-        if (parent)
+        if (page->GetIsFolderViewActive() && page->IsAtRootFolderLevel())
         {
-            SetOnlyTrackSelected(parent);
-            page->OnTrackSelectionBySurface(parent);
+            page->ToggleFolderView();
+            page->OnTrackListChange();
+            page->ForceUpdateTrackColors();
+        }
+        else
+        {
+            MediaTrack* parent = page->ExitCurrentFolder();
+            page->OnTrackListChange();
+            if (parent)
+            {
+                // select & scroll to that parent folder
+                SetOnlyTrackSelected(parent);
+                page->OnTrackSelectionBySurface(parent);
+            }
         }
     }
 };
