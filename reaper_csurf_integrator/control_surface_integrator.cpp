@@ -1566,6 +1566,10 @@ ActionContext::ActionContext(CSurfIntegrator *const csi, Action *action, Widget 
     if (meterMode  &&  strlen(meterMode) > 0)
         strncpy(meterMode_, meterMode, sizeof(meterMode_) - 1);
 
+    const char* clipDetection = widgetProperties_.get_prop(PropertyType_ClipDetection);
+    if (clipDetection && strlen(clipDetection) > 0)
+        strncpy(clipDetection_, clipDetection, sizeof(clipDetection_) - 1);
+
     for (int i = 0; i < (int)(paramsAndProperties).size(); ++i)
         if (paramsAndProperties[i] == "NoFeedback")
             provideFeedback_ = false;
