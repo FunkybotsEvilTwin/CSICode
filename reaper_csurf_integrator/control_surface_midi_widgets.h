@@ -1399,19 +1399,21 @@ private:
     double minDB_;
     double maxDB_;
     int param_;
-    
+    bool isClipped_;
+
 public:
     virtual ~QConProXMasterVUMeter_Midi_FeedbackProcessor() {}
-    QConProXMasterVUMeter_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, int param) : Midi_FeedbackProcessor(csi, surface, widget), param_(param)
-    {
-        minDB_ = 0.0;
-        maxDB_ = 24.0;
-    }
-    
+    QConProXMasterVUMeter_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, int param)
+        : Midi_FeedbackProcessor(csi, surface, widget), param_(param)
+    {}
+
     virtual const char *GetName() override { return "QConProXMasterVUMeter_Midi_FeedbackProcessor"; }
 
     virtual void ForceClear() override
     {
+        // reset clip state
+        isClipped_ = false;
+
         const PropertyList properties;
         ForceValue(properties, 0.0);
     }
@@ -1434,16 +1436,71 @@ public:
         else if (dbValue >=  0.1                    )  midiValue = 0x0E; // LED 12 Red    (> 0 dB)
         return midiValue;
     }
-    
-    virtual void SetValue  (const PropertyList &properties, double value) override
+
+    virtual void SetValue(const PropertyList &properties, double value) override
     {
-        WindowsOutputDebugString("QConProXMasterVUMeter_Midi_FeedbackProcessor: 0xd1, 0x%02x\n", (param_ << 4) | GetMidiMeterValue(value));
-        SendMidiMessage    (0xd1, (param_ << 4) | GetMidiMeterValue(value), 0);
+        // --- Clip Logic -------------------------------
+        const char* cd = properties.get_prop(PropertyType_ClipDetection);
+        if (cd && STRICASECMP(cd, "Precise") == 0)
+        {
+            MediaTrack* track = GetMasterTrack(nullptr);
+            if (track)
+            {
+                double L = Track_GetPeakHoldDB(track, 0, false);
+                double R = Track_GetPeakHoldDB(track, 1, false);
+
+                if ((L >= 0.0 || R >= 0.0) && !isClipped_)
+                {
+                    isClipped_ = true;
+                }
+                else if (isClipped_)
+                {
+                    Track_GetPeakHoldDB(track, 0, true);
+                    Track_GetPeakHoldDB(track, 1, true);
+                    isClipped_ = false;
+                }
+            }
+        }
+        // --- end clip logic -------------------------------------------------
+
+        int midiValue = GetMidiMeterValue(value);
+        if (isClipped_) midiValue = 0x0E;  // red clip LED
+
+        WindowsOutputDebugString(
+            "QConProXMasterVUMeter_Midi_FeedbackProcessor: 0xd1, 0x%02x\n",
+            (param_ << 4) | midiValue);
+        SendMidiMessage(0xd1, (param_ << 4) | midiValue, 0);
     }
 
     virtual void ForceValue(const PropertyList &properties, double value) override
     {
-        ForceMidiMessage   (0xd1, (param_ << 4) | GetMidiMeterValue(value), 0);
+        // identical to SetValue but forcing the send
+        const char* cd = properties.get_prop(PropertyType_ClipDetection);
+        if (cd && STRICASECMP(cd, "Precise") == 0)
+        {
+            MediaTrack* track = GetMasterTrack(nullptr);
+            if (track)
+            {
+                double L = Track_GetPeakHoldDB(track, 0, false);
+                double R = Track_GetPeakHoldDB(track, 1, false);
+
+                if ((L >= 0.0 || R >= 0.0) && !isClipped_)
+                {
+                    isClipped_ = true;
+                }
+                else if (isClipped_)
+                {
+                    Track_GetPeakHoldDB(track, 0, true);
+                    Track_GetPeakHoldDB(track, 1, true);
+                    isClipped_ = false;
+                }
+            }
+        }
+
+        int midiValue = GetMidiMeterValue(value);
+        if (isClipped_) midiValue = 0x0E;  // red clip LED
+
+        ForceMidiMessage(0xd1, (param_ << 4) | midiValue, 0);
     }
 };
 
@@ -1455,69 +1512,158 @@ protected:
     int displayType_;
     int channelNumber_;
     int lastMidiValue_;
-    bool isClipOn_;
+    bool isClipped_;
+
+    // MeterMode config
+    std::string   meterMode_;
 
 public:
     virtual ~MCUVUMeter_Midi_FeedbackProcessor() {}
-    MCUVUMeter_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, int displayType, int channelNumber) : Midi_FeedbackProcessor(csi, surface, widget), displayType_(displayType), channelNumber_(channelNumber)
+    MCUVUMeter_Midi_FeedbackProcessor(CSurfIntegrator *const csi, Midi_ControlSurface *surface, Widget *widget, int displayType, int channelNumber)
+        : Midi_FeedbackProcessor(csi, surface, widget), displayType_(displayType), channelNumber_(channelNumber)
     {
         lastMidiValue_ = 0;
-        isClipOn_ = false;
+        isClipped_     = false;
+        meterMode_     = "XTouch";
     }
-    
-    virtual const char *GetName() override { return "MCUVUMeter_Midi_FeedbackProcessor"; }
+
+    virtual const char* GetName() override { return "MCUVUMeter_Midi_FeedbackProcessor"; }
 
     virtual void ForceClear() override
     {
+        // Reset clip state
+        isClipped_ = false;
+
+        // Send clear message
         const PropertyList properties;
         ForceValue(properties, 0.0);
     }
 
-    virtual void SetValue(const PropertyList &properties, double value) override
+    virtual void SetValue(const PropertyList& properties, double value) override
     {
-// THE FOLLOWING COMMENTED OUT CODE WILL BE PUSHED AT A LATER DATE.
-//       int midiValue = GetMidiValue(properties, value);
-//       if (midiValue > 0)
-//            SendMidiMessage(0xd0, (channelNumber_ << 4) | midiValue, 0);
-        SendMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(properties, value), 0);
+        // ── Update meter‐mode from properties ───────────────────────────────
+        const char* mm = properties.get_prop(PropertyType_MeterMode);
+        if (mm) meterMode_ = mm;
+
+        // ── ClipLogic=Precise ------------------------
+        const char* cd = properties.get_prop(PropertyType_ClipDetection);
+        if (cd && STRICASECMP(cd, "Precise") == 0)
+        {
+            MediaTrack* track = GetTrackFromWidget();
+            if (track)
+            {
+                double L = Track_GetPeakHoldDB(track, 0, false);
+                double R = Track_GetPeakHoldDB(track, 1, false);
+
+                if ((L >= 0.0 || R >= 0.0) && !isClipped_)
+                {
+                    isClipped_ = true;
+                }
+                else if (isClipped_)
+                {
+                    Track_GetPeakHoldDB(track, 0, true);
+                    Track_GetPeakHoldDB(track, 1, true);
+                    isClipped_ = false;
+                }
+            }
+        }
+        // ── End clip logic ─────────────────────────────────────────────────—
+
+        int midiValue = GetMidiValue(properties, value);
+        if (isClipped_) midiValue = GetClipLedValue();
+
+        SendMidiMessage(0xD0,
+            (channelNumber_ << 4) | midiValue,
+            0);
     }
 
-    virtual void ForceValue(const PropertyList &properties, double value) override
+    virtual void ForceValue(const PropertyList& properties, double value) override
     {
-        ForceMidiMessage(0xd0, (channelNumber_ << 4) | GetMidiValue(properties, value), 0);
+        // identical logic to SetValue, but forcing the send
+        const char* mm = properties.get_prop(PropertyType_MeterMode);
+        if (mm) meterMode_ = mm;
+
+        const char* cd = properties.get_prop(PropertyType_ClipDetection);
+        if (cd && STRICASECMP(cd, "Precise") == 0)
+        {
+            MediaTrack* track = GetTrackFromWidget();
+            if (track)
+            {
+                double L = Track_GetPeakHoldDB(track, 0, false);
+                double R = Track_GetPeakHoldDB(track, 1, false);
+
+                if ((L >= 0.0 || R >= 0.0) && !isClipped_)
+                {
+                    isClipped_ = true;
+                }
+                else if (isClipped_)
+                {
+                    Track_GetPeakHoldDB(track, 0, true);
+                    Track_GetPeakHoldDB(track, 1, true);
+                    isClipped_ = false;
+                }
+            }
+        }
+
+        int midiValue = GetMidiValue(properties, value);
+        if (isClipped_) midiValue = GetClipLedValue();
+
+        ForceMidiMessage(0xD0,
+            (channelNumber_ << 4) | midiValue,
+            0);
     }
-    
+
+protected:
+    //-----------------------------------------------------------------------------
+    // Find the MediaTrack this widget/channel is pointing at
+    //-----------------------------------------------------------------------------
+    MediaTrack* GetTrackFromWidget()
+    {
+        if (widget_ && widget_->GetSurface() && widget_->GetSurface()->GetPage())
+        {
+            Page* page = widget_->GetSurface()->GetPage();
+            int   off = widget_->GetSurface()->GetChannelOffset();
+            Navigator* nav = page->GetNavigatorForChannel(off + channelNumber_);
+            if (nav) return nav->GetTrack();
+        }
+        int absChan = (widget_ && widget_->GetSurface())
+            ? widget_->GetSurface()->GetChannelOffset() + channelNumber_
+            : channelNumber_;
+        return CSurf_TrackFromID(absChan + 1, false);
+    }
+
+    //-----------------------------------------------------------------------------
+    // Return the clip-LED value (hard-wired red for momentary)
+    //-----------------------------------------------------------------------------
+    int GetClipLedValue()
+    {
+        if (meterMode_ == "SSLNucleus2")
+            return 0x0C;    // SSL uses 0x0C for 0 dB
+        else
+            return 0x0E;    // others use 0x0E for clip
+    }
+
+    //-----------------------------------------------------------------------------
+    // Map normalized audio to meter LED index, per hardware
+    //-----------------------------------------------------------------------------
     int GetMidiValue(const PropertyList& properties, double value)
     {
         int    midiValue = 0;
-        double   dbValue = VAL2DB(normalizedToVol(value));
-
-        //---------------------------------------------------
-        // HANDLE METER SPECIFIC SCALING, DEFAULT IS "XTOUCH"
-        //---------------------------------------------------
-        const char* meterMode = nullptr;
-
-        PropertyType propertyType = properties.prop_from_string("MeterMode");
-        if (propertyType)
-            meterMode = (char*)properties.get_prop(propertyType);
-        if (!meterMode)
-            meterMode = "XTOUCH";
+        double dbValue = VAL2DB(normalizedToVol(value));
 
         //---------------------------------------------------//
         // XTOUCH                                            //
         //---------------------------------------------------//
-        if (STRICASECMP(meterMode, "XTouch") == 0)
+        if (STRICASECMP(meterMode_.c_str(), "XTouch") == 0)
         {
             if      (dbValue >= -60.3 && dbValue < -54.1)  midiValue = 0x01;   // 1 Green1 (breakpoints offset slightly in the code to map better to surface)
             else if (dbValue >= -54.1 && dbValue < -48.2)  midiValue = 0x02;
             else if (dbValue >= -48.2 && dbValue < -42.1)  midiValue = 0x03;   // 3 Green2
             else if (dbValue >= -42.1 && dbValue < -36.2)  midiValue = 0x04;
-
             else if (dbValue >= -36.2 && dbValue < -30.1)  midiValue = 0x05;   // 5 Green3
             else if (dbValue >= -30.1 && dbValue < -18.1)  midiValue = 0x06;
             else if (dbValue >= -18.1 && dbValue < -15.1)  midiValue = 0x07;   // 7 Green4
             else if (dbValue >= -15.1 && dbValue < -12.1)  midiValue = 0x08;
-
             else if (dbValue >= -12.1 && dbValue < -9.1)   midiValue = 0x09;   // 9 Orange1
             else if (dbValue >= -9.1  && dbValue < -6.1)   midiValue = 0x0a;
             else if (dbValue >= -6.1  && dbValue < -4.6)   midiValue = 0x0b;   // 11 Orange2
@@ -1525,23 +1671,21 @@ public:
             else if (dbValue >= -3.1  && dbValue <= 0.1)   midiValue = 0x0d;   // 13 Orange3
             else if (dbValue >   0.1)                      midiValue = 0x0e;   // Red (clip)
         }
-
         //---------------------------------------------------//
         // MCU  "GAW-ORIGINAL CODE"                          //
         //---------------------------------------------------//
-        else if (STRICASECMP(meterMode, "MCU") == 0)
+        else if (STRICASECMP(meterMode_.c_str(), "MCU") == 0)
         {
             midiValue = int(value * 0x0f);
             if (midiValue > 0x0e)
                 midiValue = 0x0e;
         }
-
         //---------------------------------------------------//
         // SSLNucleus2                                       //
         //---------------------------------------------------//
         // Fourdogslong                                      //
         //---------------------------------------------------//
-        else if (STRICASECMP(meterMode, "SSLNucleus2") == 0)
+        else if (STRICASECMP(meterMode_.c_str(), "SSLNucleus2") == 0)
         {
             if      (dbValue >= -40.5 && dbValue < -30.5) midiValue = 0x03; // -40 DB LED
             else if (dbValue >= -30.5 && dbValue < -20.5) midiValue = 0x04; // -30 DB LED
@@ -1554,13 +1698,12 @@ public:
             else if (dbValue >= -2.5  && dbValue <  0   ) midiValue = 0x0b; // -2  DB LED
             else if (dbValue >=  0                      ) midiValue = 0x0c; //  0  DB LED
         }
-
         //---------------------------------------------------//
         // IconV1M                                           //
         //---------------------------------------------------//
         // Cragster, jrauber.av                              //
         //---------------------------------------------------//
-        else if (STRICASECMP(meterMode, "IconV1M") == 0)
+        else if (STRICASECMP(meterMode_.c_str(), "IconV1M") == 0)
         {
             if      (dbValue >= -60.1 && dbValue < -48.1)  midiValue = 0x01; // LED 1 Green  (–60 dB)
             else if (dbValue >= -48.1 && dbValue < -42.1)  midiValue = 0x02; // LED 2 Green  (–48 dB)
@@ -1575,14 +1718,9 @@ public:
             else if (dbValue >= -3.1  && dbValue <  0.1 )  midiValue = 0x0B; // LED 11 Orange (–3 dB)
             else if (dbValue >=  0.1)                      midiValue = 0x0E; // LED 12 Red    (> 0 dB)
         }
-
         //---------------------------------------------------//
         // SCALING COMPLETED - RETURN VALUE                  //
         //---------------------------------------------------//
-
-       if (midiValue > 0)
-           WindowsOutputDebugString("MeterMode=%s   track=%d   midvalue=0x%02x\n", meterMode, channelNumber_, midiValue);
-
         return  midiValue;
     }
 };
