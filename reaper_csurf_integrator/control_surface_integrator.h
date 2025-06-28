@@ -205,6 +205,7 @@ enum PropertyType {
   D(ZoneFolder) \
   D(FXZoneFolder) \
   D(MeterMode) \
+  D(ClipDetection) \
 
   PropertyType_Unknown = 0, // in this case, string is type=value pair
 #define DEFPT(x) PropertyType_##x ,
@@ -552,6 +553,7 @@ private:
     bool provideFeedback_= true;
 
     char meterMode_[64] = "";
+    char clipDetection_[64] = "";
 
     string m_freeFormText;
     
