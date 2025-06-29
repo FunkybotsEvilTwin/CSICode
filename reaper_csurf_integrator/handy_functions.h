@@ -20,9 +20,6 @@
 #endif
 #include <iostream>
 #include <vector>
-#include <map>
-#include <algorithm>
-#include "reaper_plugin.h"   // for time_precise(), plugin_register, CountTracks, GetTrack, GetTrackColor
 
 using namespace std;
 
@@ -62,123 +59,6 @@ static double panToNormalized(double val)
 {
     return 0.5 * (val + 1.0);
 }
-
-// Time helper for TrackColorListener
-
-static inline double PreciseTimeMs()
-{
-    return time_precise() * 1000.0;
-}
-
-// Any feedback-processor that wants color updates implements this
-struct ITrackColorListener {
-    virtual ~ITrackColorListener() = default;
-    virtual void OnTrackColorsChanged() = 0;
-};
-
-// TrackColorMonitor: polls the project-state timer and notifies registered listeners
-class TrackColorMonitor {
-public:
-    static TrackColorMonitor& GetInstance()
-    {
-        static TrackColorMonitor instance;
-
-        static bool timerHooked = ([]() {
-            plugin_register("timer", (void*)ColorMonitorTimerProc);
-            return true;
-            })();
-        return instance;
-    }
-
-    void RegisterListener(ITrackColorListener* L)
-    {
-        listeners_.push_back(L);
-    }
-
-    void UnregisterListener(ITrackColorListener* L)
-    {
-        auto it = std::find(listeners_.begin(), listeners_.end(), L);
-        if (it != listeners_.end()) listeners_.erase(it);
-    }
-
-    void CheckProjectState()
-    {
-        static int periodicCounter = 0;
-
-        int st = GetProjectStateChangeCount(nullptr);
-        if (st != lastProjState_) {
-            lastProjState_ = st;
-            CheckAllTrackColors();
-            periodicCounter = 0;  // Reset periodic check
-        }
-        else if (++periodicCounter >= 5) {  // Every 10 timer calls (~1 second)
-            periodicCounter = 0;
-            CheckAllTrackColors();  // Force check even without state change
-        }
-    }
-
-    void ForceRefresh()
-    {
-        NotifyListeners();
-    }
-
-private:
-    TrackColorMonitor() : lastProjState_(0) {}
-    ~TrackColorMonitor() = default;
-
-    static void ColorMonitorTimerProc()
-    {
-        GetInstance().CheckProjectState();
-    }
-
-    void CheckAllTrackColors()
-    {
-        bool anyChanged = false;
-        int cnt = CountTracks(nullptr);
-
-        // First check if track count changed
-        if (cnt != (int)trackOrderCache_.size()) {
-            anyChanged = true;
-        }
-
-        // Build current track order and check for changes
-        std::vector<MediaTrack*> currentOrder;
-        for (int i = 0; i < cnt; ++i) {
-            MediaTrack* T = GetTrack(nullptr, i);
-            if (!T) continue;
-
-            currentOrder.push_back(T);
-
-            // Check if track moved position
-            if (!anyChanged && i < (int)trackOrderCache_.size() && trackOrderCache_[i] != T) {
-                anyChanged = true;
-            }
-
-            // Check if track color changed
-            int col = GetTrackColor(T);
-            auto it = trackColorCache_.find(T);
-            if (it == trackColorCache_.end() || it->second != col) {
-                trackColorCache_[T] = col;
-                anyChanged = true;
-            }
-        }
-
-        // Update the track order cache
-        trackOrderCache_ = currentOrder;
-
-        if (anyChanged) NotifyListeners();
-    }
-
-    void NotifyListeners()
-    {
-        for (auto L : listeners_) if (L) L->OnTrackColorsChanged();
-    }
-
-    int                                 lastProjState_;
-    std::map<MediaTrack*, int>         trackColorCache_;
-    std::vector<MediaTrack*>           trackOrderCache_;
-    std::vector<ITrackColorListener*>  listeners_;
-};
 
 enum DebugLevel {
     DEBUG_LEVEL_ERROR = 0,
