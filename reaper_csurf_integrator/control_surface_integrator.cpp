@@ -3355,17 +3355,13 @@ void TrackNavigationManager::RebuildTracks()
     isInitialized_ = true;
 
     tracks_.clear();
-    colors_.clear();
 
     
     for (int i = 1; i <= GetNumTracks(); ++i)
     {
         if (MediaTrack *track = CSurf_TrackFromID(i, followMCP_))
             if (IsTrackVisible(track, followMCP_))
-            {
                 tracks_.push_back(track);
-                colors_.push_back(GetTrackColor(track));
-            }
     }
     
     if (tracks_.size() < oldTracksSize)
@@ -3373,8 +3369,8 @@ void TrackNavigationManager::RebuildTracks()
         for (int i = oldTracksSize; i > tracks_.size(); i--)
             page_->ForceClearTrack(i - trackOffset_);
     }
-    
-    page_->ForceUpdateTrackColors();
+
+    page_->UpdateTrackColors();
 }
 
 void TrackNavigationManager::RebuildSelectedTracks()
@@ -3396,7 +3392,7 @@ void TrackNavigationManager::RebuildSelectedTracks()
     }
     
     if (selectedTracks_.size() != oldTracksSize)
-        page_->ForceUpdateTrackColors();
+        page_->UpdateTrackColors();
 }
 
 void TrackNavigationManager::AdjustSelectedTrackBank(int amount)
@@ -3473,10 +3469,25 @@ void ControlSurface::ForceClearTrack(int trackNum)
             widget->ForceClear();
 }
 
-void ControlSurface::ForceUpdateTrackColors()
+void ControlSurface::UpdateTrackColors()
 {
-    for (auto trackColorFeedbackProcessor : trackColorFeedbackProcessors_)
-        trackColorFeedbackProcessor->ForceUpdateTrackColors();
+    bool hasChanged = false;
+    
+    for (int i = 0; i < trackColors_.size(); ++i)
+        if (MediaTrack* track = page_->GetNavigatorForChannel(i + channelOffset_)->GetTrack())
+            if (trackColors_[i] != DAW::GetTrackColor(track))
+            {
+                hasChanged = true;
+                rgba_color trackColor = DAW::GetTrackColor(track);
+                trackColors_[i].r = trackColor.r;
+                trackColors_[i].g = trackColor.g;
+                trackColors_[i].b = trackColor.b;
+                trackColors_[i].a = trackColor.a;
+            }
+    
+//    if (hasChanged)
+        for (auto trackColorFeedbackProcessor : trackColorFeedbackProcessors_)
+            trackColorFeedbackProcessor->ForceUpdateTrackColors();
 }
 
 rgba_color ControlSurface::GetTrackColorForChannel(int channel)
