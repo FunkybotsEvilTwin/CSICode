@@ -3333,44 +3333,26 @@ void ModifierManager::SetLatchModifier(bool value, Modifiers modifier, int latch
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TrackNavigationManager
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 void TrackNavigationManager::RebuildTracks()
 {
-    int oldTracksSize = (int) tracks_.size();
-    bool hasChanged = false;
-  
-    if (oldTracksSize == GetNumTracks())
-    {
-        for (int i = 1; i <= GetNumTracks(); ++i)
-            if (MediaTrack* track = CSurf_TrackFromID(i, followMCP_))
-                if (tracks_[i] != track   || colors_[i] != GetTrackColor(track))
-                {
-                    hasChanged = true;
-                    break;
-                }
-    }
-    if ( ! hasChanged && isInitialized_)
-        return;
-
-    isInitialized_ = true;
+    int oldTracksSize = (int)tracks_.size();
 
     tracks_.clear();
 
-    
     for (int i = 1; i <= GetNumTracks(); ++i)
     {
-        if (MediaTrack *track = CSurf_TrackFromID(i, followMCP_))
+        if (MediaTrack* track = CSurf_TrackFromID(i, followMCP_))
             if (IsTrackVisible(track, followMCP_))
                 tracks_.push_back(track);
     }
-    
+
     if (tracks_.size() < oldTracksSize)
     {
         for (int i = oldTracksSize; i > tracks_.size(); i--)
             page_->ForceClearTrack(i - trackOffset_);
     }
 
-    page_->UpdateTrackColors();
+        page_->UpdateTrackColors();
 }
 
 void TrackNavigationManager::RebuildSelectedTracks()
