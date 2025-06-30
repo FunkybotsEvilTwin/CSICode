@@ -2232,6 +2232,157 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class iCON_V1MDisplay_Midi_FeedbackProcessor : public Midi_FeedbackProcessor
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{
+private:
+    int offset_;
+    int displayType_;
+    int displayRow_;
+    int channel_;
+    int preventUpdateTrackColors_;
+    string lastStringSent_;
+    vector<rgba_color> currentTrackColors_;
+
+public:
+    virtual ~iCON_V1MDisplay_Midi_FeedbackProcessor() {}
+    iCON_V1MDisplay_Midi_FeedbackProcessor(CSurfIntegrator* const csi, Midi_ControlSurface* surface, Widget* widget, int displayUpperLower, int displayType, int displayRow, int channel) : Midi_FeedbackProcessor(csi, surface, widget), offset_(displayUpperLower * 56), displayType_(displayType), displayRow_(displayRow), channel_(channel)
+    {
+        preventUpdateTrackColors_ = false;
+
+        rgba_color color;
+
+        for (int i = 0; i < surface_->GetNumChannels(); ++i)
+            currentTrackColors_.push_back(color);
+    }
+
+    virtual const char* GetName() override { return "iCON_V1MDisplay_Midi_FeedbackProcessor"; }
+
+    virtual void ForceClear() override
+    {
+        const PropertyList properties;
+        ForceValue(properties, "");
+    }
+
+    virtual void SetValue(const PropertyList& properties, const char* const& inputText) override
+    {
+        if (strcmp(inputText, lastStringSent_.c_str())) // changes since last send
+            ForceValue(properties, inputText);
+    }
+
+    virtual void ForceValue(const PropertyList& properties, const char* const& inputText) override
+    {
+        lastStringSent_ = inputText;
+
+        char tmp[MEDBUF];
+        const char* text = GetWidget()->GetSurface()->GetRestrictedLengthText(inputText, tmp, sizeof(tmp));
+
+        if (!strcmp(text, "-150.00")) text = "";
+
+        struct
+        {
+            MIDI_event_ex_t evt;
+            char data[256];
+        } midiSysExData;
+        midiSysExData.evt.frame_offset = 0;
+        midiSysExData.evt.size = 0;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF0;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x00;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x00;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x66;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = displayType_;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = displayRow_;
+
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = channel_ * 7 + offset_;
+
+        int cnt = 0;
+        while (cnt++ < 7)
+            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = *text ? *text++ : ' ';
+
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF7;
+
+        SendMidiSysExMessage(&midiSysExData.evt);
+
+        // After updating text, update the track colors
+        ForceUpdateTrackColors();
+    }
+
+    // Adjust RGB to 7-bit range as required by MIDI SysEx
+    int adjustTo7bit(int value)
+    {
+        // Convert from 8-bit to 7-bit (0-127)
+        return (value >> 1) & 0x7F;
+    }
+
+    // Apply the blue color correction as mentioned in the specs
+    int adjustBlueValue(int blue, int green)
+    {
+        // Normalize green to 0-1 range
+        float greenNormalized = green / 127.0f;
+
+        // Apply the correction formula: Blue = Blue * (0.70 + (0.30 * (Green / 128)))
+        float blueAdjusted = blue * (0.70f + (0.30f * greenNormalized));
+
+        // Ensure the value stays within 0-127 range
+        int result = static_cast<int>(blueAdjusted);
+        if (result < 0) result = 0;
+        if (result > 127) result = 127;
+        return result;
+    }
+
+    virtual void ForceUpdateTrackColors() override
+    {
+        if (preventUpdateTrackColors_)
+            return;
+
+        struct
+        {
+            MIDI_event_ex_t evt;
+            char data[256];
+        } midiSysExData;
+        midiSysExData.evt.frame_offset = 0;
+        midiSysExData.evt.size = 0;
+
+        // iCON V1-M specific SysEx header for colors
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF0; // Start SysEx
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x00; // Start of header
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x02;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x4E;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x16;
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0x14; // End of header
+
+        vector<rgba_color> trackColors;
+
+        for (int i = 0; i < surface_->GetNumChannels(); ++i)
+            trackColors.push_back(surface_->GetTrackColorForChannel(i));
+
+        // Send all 8 channel colors at once (RGB triplets)
+        for (int i = 0; i < trackColors.size(); ++i)
+        {
+            rgba_color color = trackColors[i];
+            currentTrackColors_[i] = color;
+
+            // Convert from 8-bit to 7-bit values
+            int r = adjustTo7bit(color.r);
+            int g = adjustTo7bit(color.g);
+            int b = adjustTo7bit(color.b);
+
+            // Apply the blue correction for better color representation
+            b = adjustBlueValue(b, g);
+
+            // Add RGB values to SysEx message
+            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = r;
+            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = g;
+            midiSysExData.evt.midi_message[midiSysExData.evt.size++] = b;
+        }
+
+        midiSysExData.evt.midi_message[midiSysExData.evt.size++] = 0xF7; // End SysEx
+
+        SendMidiSysExMessage(&midiSysExData.evt);
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class FPDisplay_Midi_FeedbackProcessor : public Midi_FeedbackProcessor
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
