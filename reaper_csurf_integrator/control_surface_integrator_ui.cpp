@@ -2028,9 +2028,9 @@ static WDL_DLGRET dlgProcLearnFX(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM 
                 }
                 
                 EnableWindow(GetDlgItem(hwndDlg, IDC_DeepEdit), false);
-                
-                ShowWindow(GetDlgItem(hwndDlg, IDC_Unassign), false);
-                ShowWindow(GetDlgItem(hwndDlg, IDC_Assign), false);
+
+                EnableWindow(GetDlgItem(hwndDlg, IDC_Unassign), FALSE);
+                EnableWindow(GetDlgItem(hwndDlg, IDC_Assign), TRUE);
             }
             break;
             
@@ -2254,7 +2254,12 @@ static void InitLearnFocusedFXDialog(ZoneManager *zoneManager)
         ShowWindow(t->hwnd, SW_SHOW);
         SetDlgItemText(t->hwnd, IDC_SurfaceName, t->zoneManager->GetSurface()->GetName());
         
-        ShowWindow(GetDlgItem(t->hwnd, IDC_Assign),  false);
+        ShowWindow(t->hwnd, SW_SHOW);
+        SetDlgItemText(t->hwnd, IDC_SurfaceName, t->zoneManager->GetSurface()->GetName());
+
+        // leave both buttons visible; start unlinked
+        EnableWindow(GetDlgItem(t->hwnd, IDC_Assign), TRUE);  // Link = enabled
+        EnableWindow(GetDlgItem(t->hwnd, IDC_Unassign), FALSE); // Unlink = disabled
     }
 }
 
