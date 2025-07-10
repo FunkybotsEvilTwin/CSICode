@@ -2287,6 +2287,10 @@ public:
                 context->GetSurface()->GetZoneManager()->GetName(track, context->GetSlotIndex(), alias, sizeof(alias));
                 context->GetCSI()->Speak(alias);
             }
+            else
+            {
+                context->GetCSI()->Speak("No FX in this slot");
+            }
         }
     }
 };
