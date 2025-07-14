@@ -612,6 +612,7 @@ public:
     }
 };
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class ToggleEnableFocusedFXMapping  : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
@@ -628,6 +629,13 @@ public:
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
         context->GetSurface()->GetZoneManager()->DeclareToggleEnableFocusedFXMapping();
+
+        bool nowEnabled = context->GetSurface()->GetZoneManager()->GetIsFocusedFXMappingEnabled();
+
+        if (nowEnabled)
+            context->GetCSI()->Speak("Enabled");
+        else
+            context->GetCSI()->Speak("Disabled");
     }
 };
 
