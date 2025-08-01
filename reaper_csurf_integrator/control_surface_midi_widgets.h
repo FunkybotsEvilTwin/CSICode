@@ -96,19 +96,19 @@ class FaderportClassicFader14Bit_Midi_CSIMessageGenerator : public Midi_CSIMessa
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 protected:
-    MIDI_event_ex_t message1_;
+    shared_ptr<MIDI_event_ex_t> message1_;
     MIDI_event_ex_t message2_;
 
 public:
     virtual ~FaderportClassicFader14Bit_Midi_CSIMessageGenerator() {}
-    FaderportClassicFader14Bit_Midi_CSIMessageGenerator(CSurfIntegrator *const csi, Widget *widget, MIDI_event_ex_t message1, MIDI_event_ex_t message2) : Midi_CSIMessageGenerator(csi, widget), message1_(message1), message2_(message2) {}
+    FaderportClassicFader14Bit_Midi_CSIMessageGenerator(CSurfIntegrator *const csi, Widget *widget, shared_ptr<MIDI_event_ex_t> message1, MIDI_event_ex_t message2) : Midi_CSIMessageGenerator(csi, widget), message1_(message1), message2_(message2) {}
     
     virtual void ProcessMidiMessage(const MIDI_event_ex_t *midiMessage) override
     {
-        if (message1_.midi_message[1] == midiMessage->midi_message[1])
-            message1_.midi_message[2] = midiMessage->midi_message[2];
+        if (message1_->midi_message[1] == midiMessage->midi_message[1])
+            message1_->midi_message[2] = midiMessage->midi_message[2];
         else if (message2_.midi_message[1] == midiMessage->midi_message[1])
-            widget_->GetZoneManager()->DoAction(widget_, int14ToNormalized(message1_.midi_message[2], midiMessage->midi_message[2]));
+            widget_->GetZoneManager()->DoAction(widget_, int14ToNormalized(message1_->midi_message[2], midiMessage->midi_message[2]));
     }
 };
 

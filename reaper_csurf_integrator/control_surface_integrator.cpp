@@ -492,6 +492,7 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
 
         string oneByteKey = "";
         string twoByteKey = "";
+        string twoByteKeyMsg2 = "";
         string threeByteKey = "";
         string threeByteKeyMsg2 = "";
         
@@ -511,6 +512,7 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
             message2.midi_message[1] = strToHex(tokenLines[i][5]);
             message2.midi_message[2] = strToHex(tokenLines[i][6]);
             
+            twoByteKeyMsg2 = to_string(message2.midi_message[0] * 0x10000 + message2.midi_message[1] * 0x100);
             threeByteKeyMsg2 = to_string(message2.midi_message[0] * 0x10000 + message2.midi_message[1] * 0x100 + message2.midi_message[2]);
         }
         
@@ -527,7 +529,11 @@ void Midi_ControlSurface::ProcessMidiWidget(int &lineNumber, ifstream &surfaceTe
         else if (widgetType == "Fader14Bit" && size == 4)
             CSIMessageGeneratorsByMessage_.insert(make_pair(oneByteKey, make_unique<Fader14Bit_Midi_CSIMessageGenerator>(csi_, widget)));
         else if (widgetType == "FaderportClassicFader14Bit" && size == 7)
-            CSIMessageGeneratorsByMessage_.insert(make_pair(oneByteKey, make_unique<FaderportClassicFader14Bit_Midi_CSIMessageGenerator>(csi_, widget, message1, message2)));
+        {
+            shared_ptr<MIDI_event_ex_t> message1Ptr = make_shared<MIDI_event_ex_t>(message1);
+            CSIMessageGeneratorsByMessage_.insert(make_pair(twoByteKey, make_unique<FaderportClassicFader14Bit_Midi_CSIMessageGenerator>(csi_, widget, message1Ptr, message2)));
+            CSIMessageGeneratorsByMessage_.insert(make_pair(twoByteKeyMsg2, make_unique<FaderportClassicFader14Bit_Midi_CSIMessageGenerator>(csi_, widget, message1Ptr, message2)));
+        }
         else if (widgetType == "Fader7Bit" && size== 4)
             CSIMessageGeneratorsByMessage_.insert(make_pair(twoByteKey, make_unique<Fader7Bit_Midi_CSIMessageGenerator>(csi_, widget)));
         else if (widgetType == "Encoder" && widgetClass == "RotaryWidgetClass")
