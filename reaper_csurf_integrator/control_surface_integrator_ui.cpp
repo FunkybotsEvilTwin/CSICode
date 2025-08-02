@@ -31,6 +31,49 @@ static char s_fxName[MEDBUF];
 static char s_fxAlias[MEDBUF];
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// FX Learn Window Accelerator Hook
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Accelerator filter used while the FX Learn dialog is open.
+// Allows dialog navigation keys (Tab, arrows, Enter, Esc) to function normally.
+// All other keys are passed to REAPER so OSARA and other shortcuts can fire.
+
+
+int LearnFXAccelProc(MSG* msg, accelerator_register_t* ctx)
+{
+    if (s_hwndLearnFXDlg && (msg->hwnd == s_hwndLearnFXDlg || IsChild(s_hwndLearnFXDlg, msg->hwnd)))
+    {
+        if (msg->message == WM_KEYDOWN)
+        {
+            switch (msg->wParam)
+            {
+            case VK_TAB:
+            case VK_LEFT:
+            case VK_RIGHT:
+            case VK_UP:
+            case VK_DOWN:
+            case VK_RETURN:
+            case VK_ESCAPE:
+                return -1;
+
+            default:
+                return -666;
+            }
+        }
+    }
+
+    return 0;
+}
+
+// Registration struct for the accelerator hook.
+// Installed in WM_INITDIALOG and removed in WM_DESTROY.
+
+accelerator_register_t g_acreg = {
+    LearnFXAccelProc,
+    true
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct FXRowLayout
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
@@ -1986,6 +2029,9 @@ static WDL_DLGRET dlgProcLearnFX(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM 
     {
         case WM_INITDIALOG:
             {
+            s_hwndLearnFXDlg = hwndDlg;
+            plugin_register("accelerator", &g_acreg);
+
                 hFont16 = CreateFont(16,
                                    0,
                                    0,
@@ -2056,6 +2102,13 @@ static WDL_DLGRET dlgProcLearnFX(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM 
             s_hwndLearnFXDlg = NULL;
         }
             break;
+        
+        case WM_DESTROY:
+        {
+            plugin_register("-accelerator", &g_acreg);
+            s_hwndLearnFXDlg = NULL;
+        }
+        break;
 
         case WM_USER + 1024:
             {
