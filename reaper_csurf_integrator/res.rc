@@ -63,34 +63,37 @@ END
 //
 
 IDD_SURFACEEDIT_CSI DIALOGEX 0, 0, 368, 192
+STYLE  DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_CHILD
 EXSTYLE WS_EX_CONTROLPARENT
-STYLE DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_CHILD
-FONT 8, "MS Shell Dlg", 0, 0, 0x0
+FONT   8, "MS Shell Dlg", 0, 0, 0x0
 BEGIN
-    LTEXT           "Surfaces",IDC_STATIC,4,6,29,8
-    LISTBOX         IDC_LIST_Surfaces,3,19,137,121,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
 
-    LTEXT           "Pages",IDC_STATIC,145,6,20,8
-    LISTBOX         IDC_LIST_Pages,144,19,107,122,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    LTEXT      "Surfaces",            IDC_STATIC,             4,   6, 29,  8
+    LISTBOX    IDC_LIST_Surfaces,     3,  19,135,117,        LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
 
-    LTEXT           "Zones",IDC_STATIC,255,6,41,8
-    LISTBOX         IDC_LIST_PageSurfaces,255,19,107,122,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    LTEXT      "Pages",               IDC_STATIC,           145,   6, 20,  8
+    LISTBOX    IDC_LIST_Pages,       144,  19,107,117,        LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
 
-    PUSHBUTTON      "Add MIDI",IDC_BUTTON_AddMidiSurface,3,147,34,14
-    PUSHBUTTON      "Add OSC",IDC_BUTTON_AddOSCSurface,38,147,34,14
-    PUSHBUTTON      "Edit",IDC_BUTTON_EditSurface,73,147,34,14
-    PUSHBUTTON      "Remove",IDC_BUTTON_RemoveSurface,108,147,34,14
+    LTEXT      "Zones",               IDC_STATIC,           255,   6, 41,  8
+    LISTBOX    IDC_LIST_PageSurfaces,255,  19,107,117,        LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
 
-    PUSHBUTTON      "Add",IDC_BUTTON_AddPage,144,147,31,14
-    PUSHBUTTON      "Edit",IDC_BUTTON_EditPage,179,147,29,14
-    PUSHBUTTON      "Remove",IDC_BUTTON_RemovePage,213,147,39,14
+    PUSHBUTTON "Add MIDI",            IDC_BUTTON_AddMidiSurface,    3, 140, 57,14, WS_TABSTOP
+    PUSHBUTTON "Add OSC",             IDC_BUTTON_AddOSCSurface,    81, 140, 57,14, WS_TABSTOP
+    PUSHBUTTON "Edit Surface",        IDC_BUTTON_EditSurface,       3, 156, 57,14, WS_TABSTOP
+    PUSHBUTTON "Remove Surface",      IDC_BUTTON_RemoveSurface,     3, 173, 57,14, WS_TABSTOP
 
-    PUSHBUTTON      "Add",IDC_BUTTON_AddPageSurface,255,147,31,14
-    PUSHBUTTON      "Edit",IDC_BUTTON_EditPageSurface,291,147,29,14
-    PUSHBUTTON      "Remove",IDC_BUTTON_RemovePageSurface,325,147,37,14
+    PUSHBUTTON "Add Page",            IDC_BUTTON_AddPage,          144, 140, 57,14, WS_TABSTOP
+    PUSHBUTTON "Edit Page",           IDC_BUTTON_EditPage,         144, 156, 57,14, WS_TABSTOP
+    PUSHBUTTON "Remove Page",         IDC_BUTTON_RemovePage,       144, 173, 57,14, WS_TABSTOP
 
-    PUSHBUTTON      "Advanced",IDC_BUTTON_Advanced,324,3,37,14
+    PUSHBUTTON "Add Zones",           IDC_BUTTON_AddPageSurface,   255, 140, 57,14, WS_TABSTOP
+    PUSHBUTTON "Edit Zones",          IDC_BUTTON_EditPageSurface,  255, 156, 57,14, WS_TABSTOP
+    PUSHBUTTON "Remove Zones",        IDC_BUTTON_RemovePageSurface,255, 173, 57,14, WS_TABSTOP
+
+    PUSHBUTTON "Advanced",            IDC_BUTTON_Advanced,         306,   3, 57,14, WS_TABSTOP
 END
+
+
 
 IDD_DIALOG_Page DIALOGEX 0, 0, 199, 145
 EXSTYLE WS_EX_CONTROLPARENT
