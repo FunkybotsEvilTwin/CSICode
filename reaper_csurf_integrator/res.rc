@@ -281,8 +281,8 @@ BEGIN
     PUSHBUTTON      "Edit",IDC_DeepEdit,185,76,36,14
     PUSHBUTTON      "Save",IDC_Save,229,76,36,14
     CTEXT           "Surface Name",IDC_SurfaceName,14,14,251,10
-    LTEXT           "", IDC_AssignWidgetDisplay, 14, 41, 100, 19, SS_CENTER | SS_CENTERIMAGE | WS_BORDER
-    LTEXT           "", IDC_AssignFXParamDisplay, 165, 41, 100, 19, SS_CENTER | SS_CENTERIMAGE | WS_BORDER
+    EDITTEXT        IDC_AssignWidgetDisplay, 14, 41, 100, 19, ES_CENTER | ES_AUTOHSCROLL | ES_READONLY
+    EDITTEXT        IDC_AssignFXParamDisplay, 165, 41, 100, 19, ES_CENTER | ES_AUTOHSCROLL | ES_READONLY
 END
 
 IDD_DIALOG_LearnFXLevel2 DIALOGEX 0, 0, 282, 131
