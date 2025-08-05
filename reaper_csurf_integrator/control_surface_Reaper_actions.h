@@ -2115,6 +2115,8 @@ public:
             bool isMuted = ! GetTrackSendInfo_Value(track, -1, context->GetSlotIndex(), "B_MUTE");
             
             GetSetTrackSendInfo(track, -1, context->GetSlotIndex(), "B_MUTE", &isMuted);
+        
+            context->GetCSI()->Speak(isMuted ? "Muted" : "Unmuted");
         }
     }
 };
@@ -2219,6 +2221,15 @@ public:
                 mode = 0; // switch to post pan
 
             GetSetTrackSendInfo(track, -1, context->GetSlotIndex(), "I_SENDMODE", &mode);
+            
+            const char* stateText = nullptr;
+            switch (mode)
+            {
+            case 1: stateText = "Receive Pre FX";  break;
+            case 3: stateText = "Receive Post FX"; break;
+            default: stateText = "Receive Post Pan"; break;
+            }
+            context->GetCSI()->Speak(stateText);
         }
     }
 };
