@@ -633,9 +633,9 @@ public:
         bool nowEnabled = context->GetSurface()->GetZoneManager()->GetIsFocusedFXMappingEnabled();
 
         if (nowEnabled)
-            context->GetCSI()->Speak("Enabled");
+            context->GetCSI()->Speak("Focused FX Mapping Enabled");
         else
-            context->GetCSI()->Speak("Disabled");
+            context->GetCSI()->Speak("Focused FX Mapping Disabled");
     }
 };
 
