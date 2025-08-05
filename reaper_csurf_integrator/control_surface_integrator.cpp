@@ -1096,6 +1096,7 @@ void CSurfIntegrator::InitActionsDictionary()
     actions_.insert(make_pair("TrackPanAutoLeft", make_unique<TrackPanAutoLeft>()));
     actions_.insert(make_pair("TrackPanAutoRight", make_unique<TrackPanAutoRight>()));
     actions_.insert(make_pair("TrackNameDisplay", make_unique<TrackNameDisplay>()));
+    actions_.insert(make_pair("SpeakTrackName", make_unique<SpeakTrackName>()));
     actions_.insert(make_pair("TrackNumberDisplay", make_unique<TrackNumberDisplay>()));
     actions_.insert(make_pair("TrackRecordInputDisplay", make_unique<TrackRecordInputDisplay>()));
     actions_.insert(make_pair("TrackVolumeDisplay", make_unique<TrackVolumeDisplay>()));
