@@ -1301,15 +1301,7 @@ private:
         }
     }
     
-    void ClearFocusedFX()
-    {
-        if (focusedFXZone_ != NULL)
-        {
-            focusedFXZone_->Deactivate();
-            zonesToBeDeleted_.push_back(focusedFXZone_);
-            focusedFXZone_ = NULL;
-        }
-    }
+    void ClearFocusedFX();
         
     void ClearSelectedTrackFX()
     {
@@ -1619,17 +1611,7 @@ public:
         }
     }
 
-    void GoHome()
-    {
-        HideAllFXWindows();
-        ClearFXMapping();
-        ResetOffsets();
-
-        for (auto &goZone : goZones_)
-            goZone->Deactivate();
-        
-        homeZone_->Activate();
-    }
+    void GoHome();
     
     void DeclareGoHome()
     {
@@ -1712,14 +1694,7 @@ public:
         return true;
     }
 
-    void ClearFXMapping()
-    {
-        ClearLearnFocusedFXZone();
-        CloseFocusedFXDialog();
-        ClearFocusedFX();
-        ClearSelectedTrackFX();
-        ClearFXSlot();
-    }
+    void ClearFXMapping();
         
     void AdjustBank(const char *zoneName, int amount)
     {

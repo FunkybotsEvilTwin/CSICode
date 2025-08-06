@@ -3280,6 +3280,41 @@ void ZoneManager::DoTouch(Widget *widget, double value, bool &isUsed)
         homeZone_->DoTouch(widget, widget->GetName(), isUsed, value);
 }
 
+void ZoneManager::GoHome()
+{
+    HideAllFXWindows();
+    ClearFXMapping();
+    ResetOffsets();
+
+    for (auto& goZone : goZones_)
+        goZone->Deactivate();
+
+    homeZone_->Activate();
+}
+
+void ZoneManager::ClearFXMapping()
+{
+    ClearLearnFocusedFXZone();
+    CloseFocusedFXDialog();
+    ClearFocusedFX();
+    ClearSelectedTrackFX();
+    ClearFXSlot();
+
+    surface_->ForceClear();
+}
+
+void ZoneManager::ClearFocusedFX()
+{
+    if (focusedFXZone_ != NULL)
+    {
+        focusedFXZone_->Deactivate();
+        zonesToBeDeleted_.push_back(focusedFXZone_);
+        focusedFXZone_ = NULL;
+    }
+
+    surface_->ForceClear();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ModifierManager
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
