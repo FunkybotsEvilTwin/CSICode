@@ -3310,9 +3310,9 @@ void ZoneManager::ClearFocusedFX()
         focusedFXZone_->Deactivate();
         zonesToBeDeleted_.push_back(focusedFXZone_);
         focusedFXZone_ = NULL;
-    }
 
-    surface_->ForceClear();
+        surface_->ForceClear();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
