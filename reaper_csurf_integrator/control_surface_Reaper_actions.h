@@ -3360,17 +3360,9 @@ public:
     {
         context->UpdateColorValue(0.0);
         if (MediaTrack *track = context->GetTrack())
-        {
-            double isSpilled = context->GetPage()->GetIsFolderSpilled(track);
-
-            context->UpdateWidgetValue(isSpilled);
-
-            context->GetCSI()->Speak(isSpilled ? "Expanded" : "Collapsed");
-        }
+            context->UpdateWidgetValue(context->GetPage()->GetIsFolderSpilled(track));
         else
-        {
             context->UpdateWidgetValue(0.0);
-        }
     }
 
     virtual void Do(ActionContext *context, double value) override
