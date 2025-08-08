@@ -3364,6 +3364,8 @@ public:
             double isSpilled = context->GetPage()->GetIsFolderSpilled(track);
 
             context->UpdateWidgetValue(isSpilled);
+
+            context->GetCSI()->Speak(isSpilled ? "Expanded" : "Collapsed");
         }
         else
         {
@@ -3375,13 +3377,8 @@ public:
     {
         if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
         
-        if (MediaTrack* track = context->GetTrack())
-        {
+        if (MediaTrack *track = context->GetTrack())
             context->GetPage()->ToggleFolderSpill(track);
-
-            bool nowSpilled = context->GetPage()->GetIsFolderSpilled(track);
-            context->GetCSI()->Speak(nowSpilled ? "Expanded" : "Collapsed");
-        }
     }
 };
 
