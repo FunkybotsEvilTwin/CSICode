@@ -3457,6 +3457,19 @@ void TrackNavigationManager::AdjustSelectedTrackBank(int amount)
     }
 }
 
+void TrackNavigationManager::RebuildFolderTracksAndClear()
+{
+    if (currentTrackVCAFolderMode_ != 2)
+        return;
+
+    BuildFolderVectors();
+
+    page_->ForceClear();
+    page_->UpdateTrackColors();
+}
+
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ControlSurface
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

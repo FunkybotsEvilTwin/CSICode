@@ -3354,23 +3354,37 @@ class TrackToggleFolderSpill : public Action
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 {
 public:
-    virtual const char *GetName() override { return "TrackToggleFolderSpill"; }
+    virtual const char* GetName() override { return "TrackToggleFolderSpill"; }
 
-    virtual void RequestUpdate(ActionContext *context) override
+    virtual void RequestUpdate(ActionContext* context) override
     {
-        context->UpdateColorValue(0.0);
-        if (MediaTrack *track = context->GetTrack())
-            context->UpdateWidgetValue(context->GetPage()->GetIsFolderSpilled(track));
+        if (MediaTrack* track = context->GetTrack())
+        {
+            bool isSpilled = context->GetPage()->GetIsFolderSpilled(track);
+            context->UpdateWidgetValue(isSpilled ? 1.0 : 0.0);
+        }
         else
+        {
             context->UpdateWidgetValue(0.0);
+        }
     }
 
-    virtual void Do(ActionContext *context, double value) override
+    virtual void Do(ActionContext* context, double value) override
     {
-        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE) return;
-        
-        if (MediaTrack *track = context->GetTrack())
+        if (value == ActionContext::BUTTON_RELEASE_MESSAGE_VALUE)
+            return;
+
+        if (MediaTrack* track = context->GetTrack())
+        {
             context->GetPage()->ToggleFolderSpill(track);
+
+            if (context->GetPage()->GetIsFolderSpilled(track))
+                context->GetCSI()->Speak("Folder Expanded");
+            else
+                context->GetCSI()->Speak("Folder Collapsed");
+
+            context->GetPage()->RebuildFolderTracksAndClear();
+        }
     }
 };
 

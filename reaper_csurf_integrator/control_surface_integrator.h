@@ -3489,15 +3489,78 @@ public:
         vcaTrackOffset_ = 0;
     }
 
-    bool GetIsFolderSpilled(MediaTrack *track)
+    bool IsFolderParent(MediaTrack* t) const
     {
-        if (find(folderTopParentTracks_.begin(), folderTopParentTracks_.end(), track) != folderTopParentTracks_.end())
-            return true;
-        else if (GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") == 1)
-            return true;
-        else
-            return false;
+        if (!t) return false;
+        return GetMediaTrackInfo_Value(t, "I_FOLDERDEPTH") == 1;
     }
+
+    bool GetIsFolderSpilled(MediaTrack* track) const
+    {
+        if (!track) return false;
+        return currentTrackVCAFolderMode_ == 2
+            && folderParentTrack_ != NULL
+            && track == folderParentTrack_;
+    }
+
+    void BuildFolderVectors()
+    {
+        folderTopParentTracks_.clear();
+        folderSpillTracks_.clear();
+
+        if (currentTrackVCAFolderMode_ != 2)
+            return;
+
+        if (folderParentTrack_ == NULL)
+        {
+            int depth = 0;
+
+            for (int i = 1; i <= GetNumTracks(); ++i)
+            {
+                if (MediaTrack* t = CSurf_TrackFromID(i, followMCP_))
+                {
+                    const int d = (int)GetMediaTrackInfo_Value(t, "I_FOLDERDEPTH");
+
+                    if (d == 1 && depth == 0)
+                    {
+                        if (IsTrackVisible(t, followMCP_))
+                            folderTopParentTracks_.push_back(t);
+                    }
+
+                    depth += d;
+                    if (depth < 0) depth = 0;
+                }
+            }
+            return;
+        }
+
+        int parentIdx = -1;
+        for (int i = 1; i <= GetNumTracks(); ++i)
+        {
+            if (CSurf_TrackFromID(i, followMCP_) == folderParentTrack_)
+            {
+                parentIdx = i;
+                break;
+            }
+        }
+        if (parentIdx < 1) return;
+
+        int depth = 1;
+        for (int j = parentIdx + 1; j <= GetNumTracks() && depth > 0; ++j)
+        {
+            if (MediaTrack* t = CSurf_TrackFromID(j, followMCP_))
+            {
+                if (IsTrackVisible(t, followMCP_))
+                    folderSpillTracks_.push_back(t);
+
+                const int d = (int)GetMediaTrackInfo_Value(t, "I_FOLDERDEPTH");
+                depth += d;
+            }
+        }
+    }
+
+
+    void RebuildFolderTracksAndClear();
 
     void ToggleFolderSpill(MediaTrack *track)
     {
@@ -3920,6 +3983,8 @@ public:
     bool GetIsVCASpilled(MediaTrack *track) { return trackNavigationManager_->GetIsVCASpilled(track); }
     void ToggleVCASpill(MediaTrack *track) { trackNavigationManager_->ToggleVCASpill(track); }
     bool GetIsFolderSpilled(MediaTrack *track) { return trackNavigationManager_->GetIsFolderSpilled(track); }
+    bool IsFolderParent(MediaTrack* track) { return trackNavigationManager_->IsFolderParent(track); }
+    void RebuildFolderTracksAndClear() { trackNavigationManager_->RebuildFolderTracksAndClear(); }
     void ToggleFolderSpill(MediaTrack *track) { trackNavigationManager_->ToggleFolderSpill(track); }
     void ToggleScrollLink(int targetChannel) { trackNavigationManager_->ToggleScrollLink(targetChannel); }
     void ToggleSynchPages() { trackNavigationManager_->ToggleSynchPages(); }
